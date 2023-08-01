@@ -1,10 +1,784 @@
-# 测试修改
-
-# 所有stage
 stages:
+  - prepare
+  - sysnc
+  - analysis
+  - test_editor
+  - test_play
+  - del_unityeditor
+  - analysis_again
+  - clear
   - publish
+# #变量定义：
+variables:
+  #  项目名称
+  BUILD_NAME: chongxi-test
+  IMAGE_VERSION: 1 
+  UNITY_VERSION: 2019.4.32f1 #2019.4.32f1
+  UNITY_DIR: $CI_PROJECT_DIR # this needs to be an absolute path. Defaults to the root of your tree.
+  VERSION_NUMBER_VAR: $CI_COMMIT_REF_SLUG-$CI_PIPELINE_ID-$CI_JOB_ID
+  VERSION_BUILD_VAR: $CI_PIPELINE_IID
+  GRADLE_USER_HOME: $CI_PROJECT_DIR/GRADLE
+  LC_ALL: "en_US.UTF-8"
+  LANG: "en_US.UTF-8"
+  WinDEMOPATH: "C:/Tool_EmptyDemo/$CI_PROJECT_NAME/WinDEMOPATHs_$CI_PIPELINE_IID"
+  AndroidDEMOPATH: "C:/Tool_EmptyDemo/$CI_PROJECT_NAME/AndroidDEMOPATHs_$CI_PIPELINE_IID"
+  iOSDEMOPATH: "C:/Tool_EmptyDemo/$CI_PROJECT_NAME/iOSDEMOPATHs_$CI_PIPELINE_IID"
+  WebGLDEMOPATH: "C:/Tool_EmptyDemo/$CI_PROJECT_NAME/WebGLDEMOPATHs_$CI_PIPELINE_IID"
+  SwitchDEMOPATH: "C:/Tool_EmptyDemo/$CI_PROJECT_NAME/SwitchDEMOPATHs_$CI_PIPELINE_IID"
+###################################################################################
 
-# 发布至npm的job
+#################################################  创建新的unity项目  ##############
+prepare:
+  stage: prepare
+  before_script:
+    - echo $CI_COMMIT_REF_NAME
+#Batch scripts that can delete files created 2 hours ago
+    - ./ci~/delete.sh
+  script:
+    - echo "当前.用户名： $env:UserName"
+    - ./ci~/NewDemo.bat
+    - cp -r -force . $WinDEMOPATH/Packages/Tools/
+    - cp -r -force . $AndroidDEMOPATH/Packages/Tools/
+    - cp -r -force . $iOSDEMOPATH/Packages/Tools/
+    - cp -r -force . $WebGLDEMOPATH/Packages/Tools/
+    - cp -r -force . $SwitchDEMOPATH/Packages/Tools/
+  after_script:
+    - Copy-Item -Path $manifest -Destination "$env:WinDEMOPATH\Packages\manifest.json" -Force
+    - Copy-Item -Path $manifest -Destination "$env:AndroidDEMOPATH\Packages\manifest.json" -Force
+    - Copy-Item -Path $manifest -Destination "$env:iOSDEMOPATH\Packages\manifest.json" -Force
+    - Copy-Item -Path $manifest -Destination "$env:WebGLDEMOPATH\Packages\manifest.json" -Force
+    - Copy-Item -Path $manifest -Destination "$env:SwitchDEMOPATH\Packages\manifest.json" -Force
+  tags:
+    - tools-sonar
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+#################################################  同步操作->生成程序集  ##############
+Sysnc:
+  stage: sysnc
+  script:
+    - ./ci~/sync_vs.bat
+  tags:
+    - tools-sonar
+  when: on_success
+  allow_failure: true  
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+
+#################################################  第一次sonarqube分析  ##############
+analysis_Win:
+  stage: analysis
+  before_script:
+    - git config --system core.longpaths true
+    # - ./ci~/Win_sync_vs.bat
+    #用于启用 Git 仓库中文件路径长度大于 260 字符的支持。
+  script:
+    - echo "当前.用户名： $env:UserName"
+    - echo $PWD
+    - cd $WinDEMOPATH
+    - SonarScanner.MSBuild.exe begin
+      /k:"$SONAR_PROJECT_KEYS"
+      /d:sonar.host.url="$SONAR_HOST_URL"
+      /d:sonar.branch.name="$CI_COMMIT_REF_NAME -Win"
+      /d:sonar.login="$SONAR_TOKEN"
+      /v:"$CI_COMMIT_TAG"
+      /d:sonar.exclusions=Assets/**/Plugins/**/*
+    - MSBuild.exe WinDEMOPATHs_$CI_PIPELINE_IID.sln /t:Rebuild /m
+    - SonarScanner.MSBuild.exe end /d:sonar.login="$SONAR_TOKEN"
+  after_script:
+    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\sonar_Win\ -Force
+    - Copy-Item -Path $WinDEMOPATH\.sonarqube\out\0\ProjectInfo.xml -Destination $CI_PROJECT_DIR\artifacts\sonar_Win\ -Recurse -Force
+    # - Copy-Item -Path "$env:CI_PROJECT_DIR\manifest.json" -Destination "$env:WinDEMOPATH\Packages\manifest.json" -Force
+  tags:
+    - tools-sonar
+  allow_failure: true
+  artifacts:
+    paths:
+    - artifacts\sonar_Win\ProjectInfo.xml
+    expire_in: 1 week
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+
+analysis_Android:
+  stage: analysis
+  # before_script:
+  #   - git config --system core.longpaths true
+    #用于启用 Git 仓库中文件路径长度大于 260 字符的支持。
+  script:
+    -  echo "当前.用户名： $env:UserName"
+    - echo $PWD
+    - cd $AndroidDEMOPATH
+    - SonarScanner.MSBuild.exe begin
+      -k:"$SONAR_PROJECT_KEYS"
+      -d:sonar.host.url="$SONAR_HOST_URL"
+      -d:sonar.branch.name="$CI_COMMIT_REF_NAME -Android"
+      -d:sonar.login="$SONAR_TOKEN"
+      -v:"$CI_COMMIT_TAG"
+      -d:sonar.exclusions=Assets/**/Plugins/**/*
+    - MSBuild.exe AndroidDEMOPATHs_$CI_PIPELINE_IID.sln /t:Rebuild /m
+    - SonarScanner.MSBuild.exe end /d:sonar.login="$SONAR_TOKEN"
+  after_script:
+    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\sonar_Android\ -Force
+    - Copy-Item -Path $AndroidDEMOPATH\.sonarqube\out\0\ProjectInfo.xml -Destination $CI_PROJECT_DIR\artifacts\sonar_Android\ -Recurse -Force
+    # - Copy-Item -Path "$env:CI_PROJECT_DIR\manifest.json" -Destination "$env:AndroidDEMOPATH\Packages\manifest.json" -Force
+  tags:
+    - tools-sonar
+  allow_failure: true  
+  artifacts:
+    paths:
+    - artifacts\sonar_Android\ProjectInfo.xml
+    expire_in: 1 week
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+
+analysis_iOS:
+  stage: analysis
+  # before_script:
+  #   - git config --system core.longpaths true
+    #用于启用 Git 仓库中文件路径长度大于 260 字符的支持。
+  script:
+    -  echo "当前.用户名： $env:UserName"
+    - echo $PWD
+    - cd $iOSDEMOPATH
+    - SonarScanner.MSBuild.exe begin
+      -k:"$SONAR_PROJECT_KEYS"
+      -d:sonar.host.url="$SONAR_HOST_URL"
+      -d:sonar.branch.name="$CI_COMMIT_REF_NAME -iOS"
+      -d:sonar.login="$SONAR_TOKEN"
+      -v:"$CI_COMMIT_TAG"
+      -d:sonar.exclusions=Assets/**/Plugins/**/*
+    - MSBuild.exe iOSDEMOPATHs_$CI_PIPELINE_IID.sln /t:Rebuild /m
+    - SonarScanner.MSBuild.exe end /d:sonar.login="$SONAR_TOKEN"
+  after_script:
+    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\sonar_iOS\ -Force
+    - Copy-Item -Path $iOSDEMOPATH\.sonarqube\out\0\ProjectInfo.xml -Destination $CI_PROJECT_DIR\artifacts\sonar_iOS\ -Recurse -Force
+    # - Copy-Item -Path "$env:CI_PROJECT_DIR\manifest.json" -Destination "$env:iOSDEMOPATH\Packages\manifest.json" -Force
+  tags:
+    - tools-sonar
+  allow_failure: true
+  artifacts:
+    paths:
+    - artifacts\sonar_iOS\ProjectInfo.xml
+    expire_in: 1 week
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+
+analysis_WebGL:
+  stage: analysis
+  # before_script:
+  #   - git config --system core.longpaths true
+    #用于启用 Git 仓库中文件路径长度大于 260 字符的支持。
+  script:
+    -  echo "当前.用户名： $env:UserName"
+    - echo $PWD
+    - cd $WebGLDEMOPATH
+    - SonarScanner.MSBuild.exe begin
+      -k:"$SONAR_PROJECT_KEYS"
+      -d:sonar.host.url="$SONAR_HOST_URL"
+      -d:sonar.branch.name="$CI_COMMIT_REF_NAME -WebGL"
+      -d:sonar.login="$SONAR_TOKEN"
+      -v:"$CI_COMMIT_TAG"
+      -d:sonar.exclusions=Assets/**/Plugins/**/*
+    - MSBuild.exe WebGLDEMOPATHs_$CI_PIPELINE_IID.sln /t:Rebuild /m
+    - SonarScanner.MSBuild.exe end /d:sonar.login="$SONAR_TOKEN"
+  after_script:
+    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\sonar_WebGL\ -Force
+    - Copy-Item -Path $WebGLDEMOPATH\.sonarqube\out\0\ProjectInfo.xml -Destination $CI_PROJECT_DIR\artifacts\sonar_WebGL\ -Recurse -Force
+    # - Copy-Item -Path "$env:CI_PROJECT_DIR\manifest.json" -Destination "$env:WebGLDEMOPATH\Packages\manifest.json" -Force
+  tags:
+    - tools-sonar
+  allow_failure: true
+  artifacts:
+    paths:
+    - artifacts\sonar_WebGL\ProjectInfo.xml
+    expire_in: 1 week
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+
+analysis_Switch:
+  stage: analysis
+  # before_script:
+  #   - git config --system core.longpaths true
+    #用于启用 Git 仓库中文件路径长度大于 260 字符的支持。
+  script:
+    -  echo "当前.用户名： $env:UserName"
+    - echo $PWD
+    - cd $SwitchDEMOPATH
+    - SonarScanner.MSBuild.exe begin
+      -k:"$SONAR_PROJECT_KEYS"
+      -d:sonar.host.url="$SONAR_HOST_URL"
+      -d:sonar.branch.name="$CI_COMMIT_REF_NAME -Switch"
+      -d:sonar.login="$SONAR_TOKEN"
+      -v:"$CI_COMMIT_TAG"
+      -d:sonar.exclusions=Assets/**/Plugins/**/*
+    - MSBuild.exe SwitchDEMOPATHs_$CI_PIPELINE_IID.sln /t:Rebuild /m
+    - SonarScanner.MSBuild.exe end /d:sonar.login="$SONAR_TOKEN"
+  after_script:
+    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\sonar_Switch\ -Force
+    - Copy-Item -Path $SwitchDEMOPATH\.sonarqube\out\0\ProjectInfo.xml -Destination $CI_PROJECT_DIR\artifacts\sonar_Switch\ -Recurse -Force
+    # - Copy-Item -Path "$env:CI_PROJECT_DIR\manifest.json" -Destination "$env:SwitchDEMOPATH\Packages\manifest.json" -Force
+  tags:
+    - tools-sonar
+  allow_failure: true
+  artifacts:
+    paths:
+    - artifacts\sonar_Switch\ProjectInfo.xml
+    expire_in: 1 week
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+
+#################################################  test for editormode  ##############  
+test_edit_Win:
+  stage: test_editor
+  script:
+    - echo $PWD
+    - ./ci~/Test_EditMode.bat
+  after_script:
+    # - ./ci~/EditorArtifacts.bat
+    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\Test\ -Force
+    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\Test\html\ -Force
+
+    - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\EditResults_Win$CI_PIPELINE_IID.xml" -Destination $CI_PROJECT_DIR\artifacts\Test\ -Recurse -Force
+    - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\Edit_Win$CI_PIPELINE_IID.log" -Destination "$CI_PROJECT_DIR\artifacts\Test\" -Recurse -Force
+    ##xml 转 html
+    - dotnet "C:\Test\UnityTestRunnerResultsReporter-master\bin\Debug\netcoreapp2.0\UnityTestRunnerResultsReporter.dll" --resultsPath="$CI_PROJECT_DIR\artifacts\Test\html\" --resultXMLName="C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\EditResults_Win$CI_PIPELINE_IID.xml" --unityLogName="$CI_PROJECT_DIR\artifacts\Test\Edit_Win$CI_PIPELINE_IID.log"
+  tags:
+    - tools-sonar
+  allow_failure: true
+  needs: 
+   - analysis_Win
+  artifacts:
+    paths:
+      - artifacts\Test\html
+    when: always
+    expire_in: 1 week
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+
+
+test_edit_Android:
+  stage: test_editor
+  script:
+    - ./ci~/Test_EditMode_Android.bat
+  after_script:
+    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\Test\ -Force
+    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\Test\html\ -Force
+    - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\EditResults_Android$CI_PIPELINE_IID.xml" -Destination $CI_PROJECT_DIR\artifacts\Test\ -Recurse -Force
+    - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\Edit_Android$CI_PIPELINE_IID.log" -Destination "$CI_PROJECT_DIR\artifacts\Test\" -Recurse -Force
+    ##xml 转 html
+    - dotnet "C:\Test\UnityTestRunnerResultsReporter-master\bin\Debug\netcoreapp2.0\UnityTestRunnerResultsReporter.dll" --resultsPath="$CI_PROJECT_DIR\artifacts\Test\html\" --resultXMLName="C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\EditResults_Android$CI_PIPELINE_IID.xml" --unityLogName="$CI_PROJECT_DIR\artifacts\Test\Edit_Android$CI_PIPELINE_IID.log"
+  tags:
+    - tools-sonar
+  allow_failure: true
+  needs: 
+   - analysis_Android
+  artifacts:
+    paths:
+      - artifacts\Test\html
+    when: always
+    expire_in: 1 week
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+
+test_edit_iOS:
+  stage: test_editor
+  script:
+    - ./ci~/Test_EditMode_iOS.bat
+  after_script:
+    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\Test\ -Force
+    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\Test\html\ -Force
+    - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\Edit_iOS$CI_PIPELINE_IID.log" -Destination "$CI_PROJECT_DIR\artifacts\Test\" -Recurse -Force
+    - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\EditResults_iOS$CI_PIPELINE_IID.xml" -Destination $CI_PROJECT_DIR\artifacts\Test\ -Recurse -Force
+    ##xml 转 html
+    - dotnet "C:\Test\UnityTestRunnerResultsReporter-master\bin\Debug\netcoreapp2.0\UnityTestRunnerResultsReporter.dll" --resultsPath="$CI_PROJECT_DIR\artifacts\Test\html\" --resultXMLName="C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\EditResults_iOS$CI_PIPELINE_IID.xml" --unityLogName="$CI_PROJECT_DIR\artifacts\Test\Edit_iOS$CI_PIPELINE_IID.log"
+  tags:
+    - tools-sonar
+  allow_failure: true
+  needs: 
+   - analysis_iOS
+  artifacts:
+    paths:
+      - artifacts\Test\html
+    when: always
+    expire_in: 1 week
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+
+test_edit_WebGL:
+  stage: test_editor
+  script:
+    - ./ci~/Test_EditMode_WebGL.bat
+  after_script:
+    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\Test\ -Force
+    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\Test\html\ -Force
+    - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\Edit_WebGL$CI_PIPELINE_IID.log" -Destination "$CI_PROJECT_DIR\artifacts\Test\" -Recurse -Force
+    - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\EditResults_WebGL$CI_PIPELINE_IID.xml" -Destination $CI_PROJECT_DIR\artifacts\Test\ -Recurse -Force
+    ##xml 转 html
+    - dotnet "C:\Test\UnityTestRunnerResultsReporter-master\bin\Debug\netcoreapp2.0\UnityTestRunnerResultsReporter.dll" --resultsPath="$CI_PROJECT_DIR\artifacts\Test\html\" --resultXMLName="C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\EditResults_WebGL$CI_PIPELINE_IID.xml" --unityLogName="$CI_PROJECT_DIR\artifacts\Test\Edit_WebGL$CI_PIPELINE_IID.log"
+  tags:
+    - tools-sonar
+  allow_failure: true
+  needs: 
+    - analysis_WebGL
+  artifacts:
+    paths:
+      - artifacts\Test\html
+    when: always
+    expire_in: 1 week
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+
+test_edit_Switch:
+  stage: test_editor
+  script:
+    - ./ci~/Test_EditMode_Switch.bat
+  after_script:
+    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\Test\ -Force
+    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\Test\html\ -Force
+    - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\Edit_Switch$CI_PIPELINE_IID.log" -Destination "$CI_PROJECT_DIR\artifacts\Test\" -Recurse -Force
+    - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\EditResults_Switch$CI_PIPELINE_IID.xml" -Destination $CI_PROJECT_DIR/artifacts/Test/ -Recurse -Force
+    ##xml 转 html
+    - dotnet "C:\Test\UnityTestRunnerResultsReporter-master\bin\Debug\netcoreapp2.0\UnityTestRunnerResultsReporter.dll" --resultsPath="$CI_PROJECT_DIR\artifacts\Test\html\" --resultXMLName="C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\EditResults_Switch$CI_PIPELINE_IID.xml" --unityLogName="$CI_PROJECT_DIR\artifacts\Test\Edit_Switch$CI_PIPELINE_IID.log"
+  tags:
+    - tools-sonar
+  allow_failure: true
+  # when: delayed
+  # start_in: 10s
+  needs: 
+  - analysis_Switch
+  artifacts:
+    paths:
+      - artifacts\Test\html
+    when: always
+    expire_in: 1 week
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+
+#################################################  test for playmode  ##############  
+test_play_Win:
+  stage: test_play
+  script:
+    - ./ci~/Test_PlayMode.bat
+  after_script:
+    - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\PlayResults_Win$CI_PIPELINE_IID.xml" -Destination $CI_PROJECT_DIR\artifacts\Test\ -Recurse -Force
+    - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\Play_Win$CI_PIPELINE_IID.log" -Destination "$CI_PROJECT_DIR\artifacts\Test\" -Recurse -Force
+    ##xml 转 html
+    - dotnet "C:\Test\UnityTestRunnerResultsReporter-master\bin\Debug\netcoreapp2.0\UnityTestRunnerResultsReporter.dll" --resultsPath="$CI_PROJECT_DIR\artifacts\Test\html\" --resultXMLName="C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\PlayResults_Win$CI_PIPELINE_IID.xml" --unityLogName="$CI_PROJECT_DIR\artifacts\Test\Play_Win$CI_PIPELINE_IID.log"
+  tags:
+    - tools-sonar
+  needs: 
+    - test_edit_Win
+  artifacts:
+    paths:
+      - artifacts\Test\html
+    when: always
+    expire_in: 1 week
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+
+test_play_Android:
+  stage: test_play
+  script:
+    - ./ci~/Test_PlayMode_Android.bat
+  after_script:
+    - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\PlayResults_Android$CI_PIPELINE_IID.xml" -Destination $CI_PROJECT_DIR\artifacts\Test\ -Recurse -Force
+    - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\Play_Android$CI_PIPELINE_IID.log" -Destination "$CI_PROJECT_DIR\artifacts\Test\" -Recurse -Force
+    ##xml 转 html
+    - dotnet "C:\Test\UnityTestRunnerResultsReporter-master\bin\Debug\netcoreapp2.0\UnityTestRunnerResultsReporter.dll" --resultsPath="$CI_PROJECT_DIR\artifacts\Test\html\" --resultXMLName="C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\PlayResults_Android$CI_PIPELINE_IID.xml" --unityLogName="$CI_PROJECT_DIR\artifacts\Test\Play_Android$CI_PIPELINE_IID.log"
+  tags:
+    - tools-sonar
+  needs: 
+    - test_edit_Android
+  artifacts:
+    paths:
+      - artifacts\Test\html
+    when: always
+    expire_in: 1 week
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+
+test_play_iOS:
+  stage: test_play
+  script:
+    - ./ci~/Test_PlayMode_iOS.bat
+  after_script:
+    - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\PlayResults_iOS$CI_PIPELINE_IID.xml" -Destination $CI_PROJECT_DIR\artifacts\Test\ -Recurse -Force
+    - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\Play_iOS$CI_PIPELINE_IID.log" -Destination "$CI_PROJECT_DIR\artifacts\Test\" -Recurse -Force
+    ##xml 转 html
+    - dotnet "C:\Test\UnityTestRunnerResultsReporter-master\bin\Debug\netcoreapp2.0\UnityTestRunnerResultsReporter.dll" --resultsPath="$CI_PROJECT_DIR\artifacts\Test\html\" --resultXMLName="C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\PlayResults_iOS$CI_PIPELINE_IID.xml" --unityLogName="$CI_PROJECT_DIR\artifacts\Test\Play_iOS$CI_PIPELINE_IID.log"
+  tags:
+    - tools-sonar
+  needs: 
+    - test_edit_iOS
+  artifacts:
+    paths:
+      - artifacts\Test\html
+    when: always
+    expire_in: 1 week
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+
+test_play_WebGL:
+  stage: test_play
+  script:
+    - ./ci~/Test_PlayMode_WebGL.bat
+  after_script:
+    - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\PlayResults_WebGL$CI_PIPELINE_IID.xml" -Destination $CI_PROJECT_DIR\artifacts\Test\ -Recurse -Force
+    - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\Play_WebGL$CI_PIPELINE_IID.log" -Destination "$CI_PROJECT_DIR\artifacts\Test\" -Recurse -Force
+    ##xml 转 html
+    - dotnet "C:\Test\UnityTestRunnerResultsReporter-master\bin\Debug\netcoreapp2.0\UnityTestRunnerResultsReporter.dll" --resultsPath="$CI_PROJECT_DIR\artifacts\Test\html\" --resultXMLName="C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\PlayResults_WebGL$CI_PIPELINE_IID.xml" --unityLogName="$CI_PROJECT_DIR\artifacts\Test\Play_WebGL$CI_PIPELINE_IID.log"
+  tags:
+    - tools-sonar
+  needs: 
+    - test_edit_WebGL
+  artifacts:
+    paths:
+      - artifacts\Test\html
+    when: always
+    expire_in: 1 week
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+     
+test_play_Switch:
+  stage: test_play
+  script:
+    - ./ci~/Test_PlayMode_Switch.bat
+  after_script:
+    - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\PlayResults_Switch$CI_PIPELINE_IID.xml" -Destination $CI_PROJECT_DIR/artifacts/Test/ -Recurse -Force
+    - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\Play_Switch$CI_PIPELINE_IID.log" -Destination "$CI_PROJECT_DIR\artifacts\Test\" -Recurse -Force
+    ##xml 转 html
+    - dotnet "C:\Test\UnityTestRunnerResultsReporter-master\bin\Debug\netcoreapp2.0\UnityTestRunnerResultsReporter.dll" --resultsPath="$CI_PROJECT_DIR\artifacts\Test\html\" --resultXMLName="C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\PlayResults_Switch$CI_PIPELINE_IID.xml" --unityLogName="$CI_PROJECT_DIR\artifacts\Test\Play_Switch$CI_PIPELINE_IID.log"
+  tags:
+    - tools-sonar
+  needs: 
+    - test_edit_Switch
+  artifacts:
+    paths:
+      - artifacts\Test\html
+    when: always
+    expire_in: 1 week
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+ 
+#################################################  delete the unity editor  ##############  
+
+del_unityeditor_Win:
+  stage: del_unityeditor
+  script:
+    - ./ci~/Del_UnityEditor.bat
+  tags:
+    - tools-sonar
+  when: on_success
+  needs: [test_play_Win]
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+
+del_unityeditor_Android:
+  stage: del_unityeditor
+  script:
+    - ./ci~/Del_UnityEditor_Android.bat
+  tags:
+    - tools-sonar
+  when: on_success
+  needs: [test_play_Android]
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+
+del_unityeditor_iOS:
+  stage: del_unityeditor
+  script:
+    - ./ci~/Del_UnityEditor_iOS.bat
+  tags:
+    - tools-sonar
+  when: on_success
+  needs: [test_play_iOS]
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+  
+del_unityeditor_WebGL:
+  stage: del_unityeditor
+  script:
+    - ./ci~/Del_UnityEditor_WebGL.bat
+  tags:
+    - tools-sonar
+  when: on_success
+  needs: [test_play_WebGL]
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+
+del_unityeditor_Switch:
+  stage: del_unityeditor
+  script:
+    - ./ci~/Del_UnityEditor_Switch.bat
+  tags:
+    - tools-sonar
+  when: on_success
+  needs: [test_play_Switch]
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+
+#################################################  第二次sonarqube分析  ##############  
+second_analysis_Win:
+  stage: analysis_again
+  before_script:
+    - git config --system core.longpaths true
+    #用于启用 Git 仓库中文件路径长度大于 260 字符的支持。
+  script:
+    -  echo "当前.用户名： $env:UserName"
+    - echo $PWD
+    - cd $WinDEMOPATH
+    - SonarScanner.MSBuild.exe begin
+      -k:"$SONAR_PROJECT_KEYS"
+      -d:sonar.host.url="$SONAR_HOST_URL"
+      -d:sonar.branch.name="$CI_COMMIT_REF_NAME -Win-second"
+      -d:sonar.login="$SONAR_TOKEN"
+      -v:"$CI_COMMIT_TAG"
+      -d:sonar.exclusions=Assets/**/Plugins/**/*
+    - MSBuild.exe WinDEMOPATHs_$CI_PIPELINE_IID.sln /t:Rebuild /m
+    - SonarScanner.MSBuild.exe end /d:sonar.login="$SONAR_TOKEN"
+  after_script:
+    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\sonar_Win_again\ -Force
+    - Copy-Item -Path $WinDEMOPATH\.sonarqube\out\0\ProjectInfo.xml -Destination $CI_PROJECT_DIR\artifacts\sonar_Win_again\ -Recurse -Force
+  
+  tags:
+    - tools-sonar
+  when: on_success
+  needs: [del_unityeditor_Win]
+  artifacts:
+    paths:
+    - artifacts\sonar_Win_again\ProjectInfo.xml
+    expire_in: 1 week
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+
+second_analysis_Android:
+  stage: analysis_again
+  # before_script:
+  #   - git config --system core.longpaths true
+    #用于启用 Git 仓库中文件路径长度大于 260 字符的支持。
+  script:
+    -  echo "当前.用户名： $env:UserName"
+    - echo $PWD
+    - cd $AndroidDEMOPATH
+    - SonarScanner.MSBuild.exe begin
+      -k:"$SONAR_PROJECT_KEYS"
+      -d:sonar.host.url="$SONAR_HOST_URL"
+      -d:sonar.branch.name="$CI_COMMIT_REF_NAME -Android-second"
+      -d:sonar.login="$SONAR_TOKEN"
+      -v:"$CI_COMMIT_TAG"
+      -d:sonar.exclusions=Assets/**/Plugins/**/*
+    - MSBuild.exe AndroidDEMOPATHs_$CI_PIPELINE_IID.sln /t:Rebuild /m
+    - SonarScanner.MSBuild.exe end /d:sonar.login="$SONAR_TOKEN"
+  after_script:
+    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\sonar_Android_again\ -Force
+    - Copy-Item -Path $AndroidDEMOPATH\.sonarqube\out\0\ProjectInfo.xml -Destination $CI_PROJECT_DIR\artifacts\sonar_Android_again\ -Recurse -Force
+  
+  tags:
+    - tools-sonar
+  when: on_success
+  needs: [del_unityeditor_Android]
+  artifacts:
+    paths:
+    - artifacts\sonar_Android_again\ProjectInfo.xml
+    expire_in: 1 week
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+
+second_analysis_iOS:
+  stage: analysis_again
+  # before_script:
+  #   - git config --system core.longpaths true
+    #用于启用 Git 仓库中文件路径长度大于 260 字符的支持。
+  script:
+    -  echo "当前.用户名： $env:UserName"
+    - echo $PWD
+    - cd $iOSDEMOPATH
+    - SonarScanner.MSBuild.exe begin
+      -k:"$SONAR_PROJECT_KEYS"
+      -d:sonar.host.url="$SONAR_HOST_URL"
+      -d:sonar.branch.name="$CI_COMMIT_REF_NAME -iOS-second"
+      -d:sonar.login="$SONAR_TOKEN"
+      -v:"$CI_COMMIT_TAG"
+      -d:sonar.exclusions=Assets/**/Plugins/**/*
+    - MSBuild.exe iOSDEMOPATHs_$CI_PIPELINE_IID.sln /t:Rebuild /m
+    - SonarScanner.MSBuild.exe end /d:sonar.login="$SONAR_TOKEN"
+  after_script:
+    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\sonar_iOS_again\ -Force
+    - Copy-Item -Path $iOSDEMOPATH\.sonarqube\out\0\ProjectInfo.xml -Destination $CI_PROJECT_DIR\artifacts\sonar_iOS_again\ -Recurse -Force
+  
+  tags:
+    - tools-sonar
+  when: on_success
+  needs: [del_unityeditor_iOS]
+  artifacts:
+    paths:
+    - artifacts\sonar_iOS_again\ProjectInfo.xml
+    expire_in: 1 week
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+
+second_analysis_WebGL:
+  stage: analysis_again
+  # before_script:
+  #   - git config --system core.longpaths true
+    #用于启用 Git 仓库中文件路径长度大于 260 字符的支持。
+  script:
+    -  echo "当前.用户名： $env:UserName"
+    - echo $PWD
+    - cd $WebGLDEMOPATH
+    - SonarScanner.MSBuild.exe begin
+      -k:"$SONAR_PROJECT_KEYS"
+      -d:sonar.host.url="$SONAR_HOST_URL"
+      -d:sonar.branch.name="$CI_COMMIT_REF_NAME -WebGL-second"
+      -d:sonar.login="$SONAR_TOKEN"
+      -v:"$CI_COMMIT_TAG"
+      -d:sonar.exclusions=Assets/**/Plugins/**/*
+    - MSBuild.exe WebGLDEMOPATHs_$CI_PIPELINE_IID.sln /t:Rebuild /m
+    - SonarScanner.MSBuild.exe end /d:sonar.login="$SONAR_TOKEN"
+  after_script:
+    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\sonar_WebGL_again\ -Force
+    - Copy-Item -Path $WebGLDEMOPATH\.sonarqube\out\0\ProjectInfo.xml -Destination $CI_PROJECT_DIR\artifacts\sonar_WebGL_again\ -Recurse -Force
+  
+  tags:
+    - tools-sonar
+  when: on_success
+  needs: [del_unityeditor_WebGL]
+  artifacts:
+    paths:
+    - artifacts\sonar_WebGL_again\ProjectInfo.xml
+    expire_in: 1 week
+  only:
+    refs:
+    - tags
+    - merge_requests
+
+
+second_analysis_Switch:
+  stage: analysis_again
+  # before_script:
+  #   - git config --system core.longpaths true
+    #用于启用 Git 仓库中文件路径长度大于 260 字符的支持。
+  script:
+    -  echo "当前.用户名： $env:UserName"
+    - echo $PWD
+    - cd $SwitchDEMOPATH
+    - SonarScanner.MSBuild.exe begin
+      -k:"$SONAR_PROJECT_KEYS"
+      -d:sonar.host.url="$SONAR_HOST_URL"
+      -d:sonar.branch.name="$CI_COMMIT_REF_NAME -Switch-second"
+      -d:sonar.login="$SONAR_TOKEN"
+      -v:"$CI_COMMIT_TAG"
+      -d:sonar.exclusions=Assets/**/Plugins/**/*
+    - MSBuild.exe SwitchDEMOPATHs_$CI_PIPELINE_IID.sln /t:Rebuild /m
+    - SonarScanner.MSBuild.exe end /d:sonar.login="$SONAR_TOKEN"
+  after_script:
+    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\sonar_Switch_again\ -Force
+    - Copy-Item -Path $SwitchDEMOPATH\.sonarqube\out\0\ProjectInfo.xml -Destination $CI_PROJECT_DIR\artifacts\sonar_Switch_again\ -Recurse -Force
+  
+  tags:
+    - tools-sonar
+  when: on_success
+  needs: [del_unityeditor_Switch]
+  artifacts:
+    paths:
+    - artifacts\sonar_Switch_again\ProjectInfo.xml
+    expire_in: 1 week
+  only:
+    refs:
+    - tags
+    - merge_requests
+################################################################################
+
+# 用来从你的工作目录中删除所有没有tracked过的文件
+Clear:
+  stage: clear
+  script:
+    - echo $pwd
+    - Remove-Item -Path "./artifacts" -Recurse -Force
+    # - rm -r "./artifacts"
+  when: on_success
+  # dependencies: []
+  tags:
+    - tools-sonar
+  only:
+    refs:
+    - tags
+    - merge_requests
+#################################################  发布至npm的job  ##############  
 publish-to-npm:
   # 在publish的stage执行
   stage:
@@ -27,9 +801,37 @@ publish-to-npm:
     - npm config set _auth $NPM_TOKEN
     # 发布
     - npm publish
-  # 只在tags被推送时执行
+  # 只有当Git tag为“publish”时，此作业才会被执行
+  # rules:
+  #   - if: '$CI_COMMIT_TAG == "publish"'
+  when: on_success
+  dependencies: []
+  # when: manual
   only:
     - tags
   # 指定带有哪些tags的runner可以执行这个job
   tags:
     - prod
+
+# # 用来从你的工作目录中删除所有没有tracked过的文件
+# Clear:
+#   stage: clear
+#   script:
+#     - git clean -f
+#   tags:
+#     - tools-sonar
+#   when: always
+
+# 当发生Git 索引文件不完整的错误时，手动运行该job。
+# Git_reset:
+#   stage: git_reset
+#   script:
+#     - Remove-Item -Path .git/index
+#     - git reset
+#   tags:
+#     - tools-sonar
+#   when: manual
+#   only:
+#     refs:
+#     - tags
+#     - merge_requests
