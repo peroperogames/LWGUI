@@ -52,3 +52,4 @@ cat package.json
 # 删除临时文件
 rm -f old_package_name_file
 rm -f expected_package_prefix_file
+
