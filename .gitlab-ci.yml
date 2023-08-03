@@ -794,7 +794,7 @@ publish-to-npm:
   # 执行的脚本
   script:
     # package.json的预处理shell脚本
-    - sh package_preprocess.sh
+    - sh ./ci~/package_preprocess.sh
     # 设定npm的地址
     - npm config set registry $NPM_URL
     # 设定npm的token
