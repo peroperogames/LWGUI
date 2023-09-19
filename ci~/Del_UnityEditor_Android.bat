@@ -1,7 +1,3 @@
-REM @echo off
-
-REM set file="%AndroidDEMOPATH%/com.prpr.%assembly_name%.csproj"
-REM powershell -Command "(gc %file%) -replace ';UNITY_EDITOR;UNITY_EDITOR_64;UNITY_EDITOR_WIN', '' | Out-File %file%"
 @echo off
 
 for %%f in (%AndroidDEMOPATH%\*.csproj) do (
