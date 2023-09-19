@@ -33,6 +33,7 @@ prepare:
   before_script:
     - echo $CI_COMMIT_REF_NAME
 #Batch scripts that can delete files created 2 hours ago
+
     - ./ci~/delete.sh
   script:
     - echo "当前.用户名： $env:UserName"
@@ -60,10 +61,18 @@ Sysnc:
   stage: sysnc
   script:
     - ./ci~/sync_vs.bat
+  after_script:
+    - echo $pwd
+    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\sync_log\ -Force
+    - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\SysnsLog\$CI_PIPELINE_IID" -Destination $CI_PROJECT_DIR\artifacts\sync_log\ -Recurse -Force
   tags:
     - tools-sonar
   when: on_success
-  allow_failure: true  
+  # allow_failure: true  
+  artifacts:
+    paths:
+    - artifacts\sync_log
+    expire_in: 1 week
   only:
     refs:
     - tags
@@ -250,18 +259,16 @@ analysis_Switch:
 #################################################  test for editormode  ##############  
 test_edit_Win:
   stage: test_editor
-  script:
+  before_script:
     - echo $PWD
     - ./ci~/Test_EditMode.bat
-  after_script:
-    # - ./ci~/EditorArtifacts.bat
+  script:
     - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\Test\ -Force
-    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\Test\html\ -Force
-
     - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\EditResults_Win$CI_PIPELINE_IID.xml" -Destination $CI_PROJECT_DIR\artifacts\Test\ -Recurse -Force
     - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\Edit_Win$CI_PIPELINE_IID.log" -Destination "$CI_PROJECT_DIR\artifacts\Test\" -Recurse -Force
     ##xml 转 html
-    - dotnet "C:\Test\UnityTestRunnerResultsReporter-master\bin\Debug\netcoreapp2.0\UnityTestRunnerResultsReporter.dll" --resultsPath="$CI_PROJECT_DIR\artifacts\Test\html\" --resultXMLName="C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\EditResults_Win$CI_PIPELINE_IID.xml" --unityLogName="$CI_PROJECT_DIR\artifacts\Test\Edit_Win$CI_PIPELINE_IID.log"
+    - ./ci~/ExistOrNot_TestEdit_Win.bat
+  retry: 2
   tags:
     - tools-sonar
   allow_failure: true
@@ -269,7 +276,7 @@ test_edit_Win:
    - analysis_Win
   artifacts:
     paths:
-      - artifacts\Test\html
+      - artifacts
     when: always
     expire_in: 1 week
   only:
@@ -277,19 +284,18 @@ test_edit_Win:
     - tags
     - merge_requests
 
-
-
 test_edit_Android:
   stage: test_editor
-  script:
+  before_script:
     - ./ci~/Test_EditMode_Android.bat
-  after_script:
+  script:
     - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\Test\ -Force
     - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\Test\html\ -Force
     - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\EditResults_Android$CI_PIPELINE_IID.xml" -Destination $CI_PROJECT_DIR\artifacts\Test\ -Recurse -Force
     - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\Edit_Android$CI_PIPELINE_IID.log" -Destination "$CI_PROJECT_DIR\artifacts\Test\" -Recurse -Force
     ##xml 转 html
-    - dotnet "C:\Test\UnityTestRunnerResultsReporter-master\bin\Debug\netcoreapp2.0\UnityTestRunnerResultsReporter.dll" --resultsPath="$CI_PROJECT_DIR\artifacts\Test\html\" --resultXMLName="C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\EditResults_Android$CI_PIPELINE_IID.xml" --unityLogName="$CI_PROJECT_DIR\artifacts\Test\Edit_Android$CI_PIPELINE_IID.log"
+    - ./ci~/ExistOrNot_TestEdit_Android.bat
+  retry: 2
   tags:
     - tools-sonar
   allow_failure: true
@@ -297,7 +303,7 @@ test_edit_Android:
    - analysis_Android
   artifacts:
     paths:
-      - artifacts\Test\html
+      - artifacts
     when: always
     expire_in: 1 week
   only:
@@ -308,15 +314,15 @@ test_edit_Android:
 
 test_edit_iOS:
   stage: test_editor
-  script:
+  before_script:
     - ./ci~/Test_EditMode_iOS.bat
-  after_script:
+  script:
     - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\Test\ -Force
-    - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\Test\html\ -Force
     - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\Edit_iOS$CI_PIPELINE_IID.log" -Destination "$CI_PROJECT_DIR\artifacts\Test\" -Recurse -Force
     - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\EditResults_iOS$CI_PIPELINE_IID.xml" -Destination $CI_PROJECT_DIR\artifacts\Test\ -Recurse -Force
     ##xml 转 html
-    - dotnet "C:\Test\UnityTestRunnerResultsReporter-master\bin\Debug\netcoreapp2.0\UnityTestRunnerResultsReporter.dll" --resultsPath="$CI_PROJECT_DIR\artifacts\Test\html\" --resultXMLName="C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\EditResults_iOS$CI_PIPELINE_IID.xml" --unityLogName="$CI_PROJECT_DIR\artifacts\Test\Edit_iOS$CI_PIPELINE_IID.log"
+    - ./ci~/ExistOrNot_TestEdit_iOS.bat
+  retry: 2
   tags:
     - tools-sonar
   allow_failure: true
@@ -324,7 +330,7 @@ test_edit_iOS:
    - analysis_iOS
   artifacts:
     paths:
-      - artifacts\Test\html
+      - artifacts
     when: always
     expire_in: 1 week
   only:
@@ -335,15 +341,16 @@ test_edit_iOS:
 
 test_edit_WebGL:
   stage: test_editor
-  script:
+  before_script:
     - ./ci~/Test_EditMode_WebGL.bat
-  after_script:
+  script:
     - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\Test\ -Force
     - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\Test\html\ -Force
     - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\Edit_WebGL$CI_PIPELINE_IID.log" -Destination "$CI_PROJECT_DIR\artifacts\Test\" -Recurse -Force
     - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\EditResults_WebGL$CI_PIPELINE_IID.xml" -Destination $CI_PROJECT_DIR\artifacts\Test\ -Recurse -Force
     ##xml 转 html
-    - dotnet "C:\Test\UnityTestRunnerResultsReporter-master\bin\Debug\netcoreapp2.0\UnityTestRunnerResultsReporter.dll" --resultsPath="$CI_PROJECT_DIR\artifacts\Test\html\" --resultXMLName="C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\EditResults_WebGL$CI_PIPELINE_IID.xml" --unityLogName="$CI_PROJECT_DIR\artifacts\Test\Edit_WebGL$CI_PIPELINE_IID.log"
+    - ./ci~/ExistOrNot_TestEdit_WebGL.bat
+  retry: 2
   tags:
     - tools-sonar
   allow_failure: true
@@ -351,7 +358,7 @@ test_edit_WebGL:
     - analysis_WebGL
   artifacts:
     paths:
-      - artifacts\Test\html
+      - artifacts
     when: always
     expire_in: 1 week
   only:
@@ -362,15 +369,16 @@ test_edit_WebGL:
 
 test_edit_Switch:
   stage: test_editor
-  script:
+  before_script:
     - ./ci~/Test_EditMode_Switch.bat
-  after_script:
+  script:
     - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\Test\ -Force
     - New-Item -ItemType Directory -Path $CI_PROJECT_DIR\artifacts\Test\html\ -Force
     - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\Edit_Switch$CI_PIPELINE_IID.log" -Destination "$CI_PROJECT_DIR\artifacts\Test\" -Recurse -Force
     - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\EditResults_Switch$CI_PIPELINE_IID.xml" -Destination $CI_PROJECT_DIR/artifacts/Test/ -Recurse -Force
     ##xml 转 html
-    - dotnet "C:\Test\UnityTestRunnerResultsReporter-master\bin\Debug\netcoreapp2.0\UnityTestRunnerResultsReporter.dll" --resultsPath="$CI_PROJECT_DIR\artifacts\Test\html\" --resultXMLName="C:\Tool_EmptyDemo\$CI_PROJECT_NAME\EditReport\EditResults_Switch$CI_PIPELINE_IID.xml" --unityLogName="$CI_PROJECT_DIR\artifacts\Test\Edit_Switch$CI_PIPELINE_IID.log"
+    - ./ci~/ExistOrNot_TestEdit_Switch.bat
+  retry: 2
   tags:
     - tools-sonar
   allow_failure: true
@@ -380,7 +388,7 @@ test_edit_Switch:
   - analysis_Switch
   artifacts:
     paths:
-      - artifacts\Test\html
+      - artifacts
     when: always
     expire_in: 1 week
   only:
@@ -389,23 +397,24 @@ test_edit_Switch:
     - merge_requests
 
 
-#################################################  test for playmode  ##############  
+# #################################################  test for playmode  ##############  
 test_play_Win:
   stage: test_play
-  script:
+  before_script:
     - ./ci~/Test_PlayMode.bat
-  after_script:
+  script:
     - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\PlayResults_Win$CI_PIPELINE_IID.xml" -Destination $CI_PROJECT_DIR\artifacts\Test\ -Recurse -Force
     - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\Play_Win$CI_PIPELINE_IID.log" -Destination "$CI_PROJECT_DIR\artifacts\Test\" -Recurse -Force
     ##xml 转 html
-    - dotnet "C:\Test\UnityTestRunnerResultsReporter-master\bin\Debug\netcoreapp2.0\UnityTestRunnerResultsReporter.dll" --resultsPath="$CI_PROJECT_DIR\artifacts\Test\html\" --resultXMLName="C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\PlayResults_Win$CI_PIPELINE_IID.xml" --unityLogName="$CI_PROJECT_DIR\artifacts\Test\Play_Win$CI_PIPELINE_IID.log"
+    - ./ci~/ExistOrNot_TestPlay_Win.bat
+  retry: 2
   tags:
     - tools-sonar
   needs: 
     - test_edit_Win
   artifacts:
     paths:
-      - artifacts\Test\html
+      - artifacts
     when: always
     expire_in: 1 week
   only:
@@ -416,20 +425,21 @@ test_play_Win:
 
 test_play_Android:
   stage: test_play
-  script:
+  before_script:
     - ./ci~/Test_PlayMode_Android.bat
-  after_script:
+  script:
     - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\PlayResults_Android$CI_PIPELINE_IID.xml" -Destination $CI_PROJECT_DIR\artifacts\Test\ -Recurse -Force
     - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\Play_Android$CI_PIPELINE_IID.log" -Destination "$CI_PROJECT_DIR\artifacts\Test\" -Recurse -Force
     ##xml 转 html
-    - dotnet "C:\Test\UnityTestRunnerResultsReporter-master\bin\Debug\netcoreapp2.0\UnityTestRunnerResultsReporter.dll" --resultsPath="$CI_PROJECT_DIR\artifacts\Test\html\" --resultXMLName="C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\PlayResults_Android$CI_PIPELINE_IID.xml" --unityLogName="$CI_PROJECT_DIR\artifacts\Test\Play_Android$CI_PIPELINE_IID.log"
+    - ./ci~/ExistOrNot_TestPlay_Android.bat
+  retry: 2
   tags:
     - tools-sonar
   needs: 
     - test_edit_Android
   artifacts:
     paths:
-      - artifacts\Test\html
+      - artifacts
     when: always
     expire_in: 1 week
   only:
@@ -440,20 +450,20 @@ test_play_Android:
 
 test_play_iOS:
   stage: test_play
-  script:
+  before_script:
     - ./ci~/Test_PlayMode_iOS.bat
-  after_script:
+  script:
     - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\PlayResults_iOS$CI_PIPELINE_IID.xml" -Destination $CI_PROJECT_DIR\artifacts\Test\ -Recurse -Force
     - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\Play_iOS$CI_PIPELINE_IID.log" -Destination "$CI_PROJECT_DIR\artifacts\Test\" -Recurse -Force
     ##xml 转 html
-    - dotnet "C:\Test\UnityTestRunnerResultsReporter-master\bin\Debug\netcoreapp2.0\UnityTestRunnerResultsReporter.dll" --resultsPath="$CI_PROJECT_DIR\artifacts\Test\html\" --resultXMLName="C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\PlayResults_iOS$CI_PIPELINE_IID.xml" --unityLogName="$CI_PROJECT_DIR\artifacts\Test\Play_iOS$CI_PIPELINE_IID.log"
+    - ./ci~/ExistOrNot_TestPlay_iOS.bat
   tags:
     - tools-sonar
   needs: 
     - test_edit_iOS
   artifacts:
     paths:
-      - artifacts\Test\html
+      - artifacts
     when: always
     expire_in: 1 week
   only:
@@ -464,20 +474,21 @@ test_play_iOS:
 
 test_play_WebGL:
   stage: test_play
-  script:
+  before_script:
     - ./ci~/Test_PlayMode_WebGL.bat
-  after_script:
+  script:
     - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\PlayResults_WebGL$CI_PIPELINE_IID.xml" -Destination $CI_PROJECT_DIR\artifacts\Test\ -Recurse -Force
     - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\Play_WebGL$CI_PIPELINE_IID.log" -Destination "$CI_PROJECT_DIR\artifacts\Test\" -Recurse -Force
     ##xml 转 html
-    - dotnet "C:\Test\UnityTestRunnerResultsReporter-master\bin\Debug\netcoreapp2.0\UnityTestRunnerResultsReporter.dll" --resultsPath="$CI_PROJECT_DIR\artifacts\Test\html\" --resultXMLName="C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\PlayResults_WebGL$CI_PIPELINE_IID.xml" --unityLogName="$CI_PROJECT_DIR\artifacts\Test\Play_WebGL$CI_PIPELINE_IID.log"
+    - ./ci~/ExistOrNot_TestPlay_WebGL.bat
+  retry: 2
   tags:
     - tools-sonar
   needs: 
     - test_edit_WebGL
   artifacts:
     paths:
-      - artifacts\Test\html
+      - artifacts
     when: always
     expire_in: 1 week
   only:
@@ -488,20 +499,21 @@ test_play_WebGL:
      
 test_play_Switch:
   stage: test_play
-  script:
+  before_script:
     - ./ci~/Test_PlayMode_Switch.bat
-  after_script:
+  script:
     - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\PlayResults_Switch$CI_PIPELINE_IID.xml" -Destination $CI_PROJECT_DIR/artifacts/Test/ -Recurse -Force
     - Copy-Item -Path "C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\Play_Switch$CI_PIPELINE_IID.log" -Destination "$CI_PROJECT_DIR\artifacts\Test\" -Recurse -Force
     ##xml 转 html
-    - dotnet "C:\Test\UnityTestRunnerResultsReporter-master\bin\Debug\netcoreapp2.0\UnityTestRunnerResultsReporter.dll" --resultsPath="$CI_PROJECT_DIR\artifacts\Test\html\" --resultXMLName="C:\Tool_EmptyDemo\$CI_PROJECT_NAME\PlayReport\PlayResults_Switch$CI_PIPELINE_IID.xml" --unityLogName="$CI_PROJECT_DIR\artifacts\Test\Play_Switch$CI_PIPELINE_IID.log"
+    - ./ci~/ExistOrNot_TestPlay_Switch.bat
+  retry: 2
   tags:
     - tools-sonar
   needs: 
     - test_edit_Switch
   artifacts:
     paths:
-      - artifacts\Test\html
+      - artifacts
     when: always
     expire_in: 1 week
   only:
@@ -510,7 +522,7 @@ test_play_Switch:
     - merge_requests
 
  
-#################################################  delete the unity editor  ##############  
+# #################################################  delete the unity editor  ##############  
 
 del_unityeditor_Win:
   stage: del_unityeditor
