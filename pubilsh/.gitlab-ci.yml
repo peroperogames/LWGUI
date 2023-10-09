@@ -1,0 +1,35 @@
+#################################################  发布至npm的job  ##############  
+publish-to-npm:
+  # 在publish的stage执行
+  stage:
+    publish
+  # 需要填入的环境变量名
+  variables:
+    # 期望的包名前缀，后续的shell脚本会用到
+    EXPECTED_PACKAGE_PREFIX: "com.prpr"
+  # 需要使用的image
+  image:
+    # node.js的image
+    # node:18
+    node@sha256:c47a2c61e635eb4938fcd56a1139b552300624b53e3eca06b5554a577f1842cf
+  # 执行的脚本
+  script:
+    # package.json的预处理shell脚本
+    - sh ./ci~/package_preprocess.sh
+    # 设定npm的地址
+    - npm config set registry $NPM_URL
+    # 设定npm的token
+    - npm config set _auth $NPM_TOKEN
+    # 发布
+    - npm publish
+  # 只有当Git tag为“publish”时，此作业才会被执行
+  # rules:
+  #   - if: '$CI_COMMIT_TAG == "publish"'
+  when: on_success
+  dependencies: []
+  # when: manual
+  only:
+    - tags
+  # 指定带有哪些tags的runner可以执行这个job
+  tags:
+    - prod
