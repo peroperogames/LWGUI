@@ -2,6 +2,11 @@
 stages:
   - publish
 
+pp:
+  stage: publish
+  script:
+    - echo nihao
+
 # 发布至npm的job
 publish-to-npm:
   # 在publish的stage执行
