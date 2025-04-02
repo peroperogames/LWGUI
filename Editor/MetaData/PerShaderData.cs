@@ -31,7 +31,10 @@ namespace LWGUI
 		public bool IsDefaultDisplayMode() { return !(showAllAdvancedProperties || showAllHiddenProperties || showOnlyModifiedProperties || showOnlyModifiedGroups); }
 	}
 
-	public class PropertyStaticData
+	/// <summary>
+	/// The static metadata of Material Property is only related to Shader.
+	/// </summary>
+	public partial class PropertyStaticData
 	{
 		public string name        = string.Empty;
 		public string displayName = string.Empty; // Decoded displayName (Helpbox and Tooltip are encoded in displayName)
@@ -55,7 +58,7 @@ namespace LWGUI
 		public string                           conditionalDisplayKeyword = string.Empty;                           // [Group(groupName_conditionalDisplayKeyword)]
 
 		// Drawers
-		public IBasePresetDrawer presetDrawer = null;
+		public IPresetDrawer presetDrawer = null;
 		public List<IBaseDrawer> baseDrawers  = null;
 
 		// Metadata
@@ -105,17 +108,19 @@ namespace LWGUI
 				propStaticDatas[prop.name] = propStaticData;
 
 				// Get Drawers and Build Drawer StaticMetaData
+				bool hasDecodedStaticMetaData = false;
 				{
 					var drawer = ReflectionHelper.GetPropertyDrawer(shader, prop, out var decoratorDrawers);
 
-					if (drawer is IBasePresetDrawer)
-						propStaticData.presetDrawer = drawer as IBasePresetDrawer;
+					if (drawer is IPresetDrawer)
+						propStaticData.presetDrawer = drawer as IPresetDrawer;
 
 					var baseDrawer = drawer as IBaseDrawer;
 					if (baseDrawer != null)
 					{
 						propStaticData.baseDrawers = new List<IBaseDrawer>() { baseDrawer };
 						baseDrawer.BuildStaticMetaData(shader, prop, props, propStaticData);
+						hasDecodedStaticMetaData = true;
 					}
 
 					decoratorDrawers?.ForEach(decoratorDrawer =>
@@ -133,7 +138,8 @@ namespace LWGUI
 					});
 				}
 
-				DecodeMetaDataFromDisplayName(prop, propStaticData);
+				if (!hasDecodedStaticMetaData)
+					DecodeMetaDataFromDisplayName(prop, propStaticData);
 			}
 
 			// Check Data
@@ -245,7 +251,7 @@ namespace LWGUI
 
 		private static readonly string _helpboxSplitter = "%";
 
-		public void DecodeMetaDataFromDisplayName(MaterialProperty prop, PropertyStaticData propStaticData)
+		public static void DecodeMetaDataFromDisplayName(MaterialProperty prop, PropertyStaticData propStaticData)
 		{
 			var tooltips = prop.displayName.Split(new String[] { _tooltipSplitter }, StringSplitOptions.None);
 			if (tooltips.Length > 1)

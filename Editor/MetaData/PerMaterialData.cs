@@ -30,6 +30,7 @@ namespace LWGUI
 		public bool   hasChildrenModified     = false;        // Are Children properties modified in the material?
 		public bool   hasRevertChanged        = false;        // Used to call property EndChangeCheck()
 		public bool   isShowing               = true;         // ShowIf() result
+		public bool   isAnimated              = false;        // Material Parameter Animation preview in Timeline is activated
 	}
 
 	/// <summary>
@@ -43,15 +44,17 @@ namespace LWGUI
 		public List<PersetDynamicData>                 activePresetDatas        = new List<PersetDynamicData>();
 		public int                                     modifiedCount            = 0;
 		public Dictionary<string, bool>                cachedModifiedProperties = null;
-		public bool                                    forceInit              = true;
+		public bool                                    forceInit                = true;
 
-		public PerMaterialData(Shader shader, Material material, MaterialProperty[] props, PerShaderData perShaderData)
+		public PerMaterialData(Shader shader, Material material, MaterialEditor editor, MaterialProperty[] props, PerShaderData perShaderData)
 		{
-			Init(shader, material, props, perShaderData);
+			Init(shader, material, editor, props, perShaderData);
 		}
 
-		public void Init(Shader shader, Material material, MaterialProperty[] props, PerShaderData perShaderData)
+		public void Init(Shader shader, Material material, MaterialEditor editor, MaterialProperty[] props, PerShaderData perShaderData)
 		{
+			forceInit = false;
+
 			// Reset Datas
 			this.props = props;
 			this.material = material;
@@ -62,10 +65,15 @@ namespace LWGUI
 			// Get active presets
 			foreach (var prop in props)
 			{
-				var activePreset = perShaderData.propStaticDatas[prop.name].presetDrawer
-												?.GetActivePreset(prop, perShaderData.propStaticDatas[prop.name].propertyPresetAsset);
-				if (activePreset != null)
+				var propStaticData = perShaderData.propStaticDatas[prop.name];
+				var activePreset = propStaticData.presetDrawer?.GetActivePreset(prop, propStaticData.propertyPresetAsset);
+				if (activePreset != null
+				    // Filter invisible preset properties
+						&& (propStaticData.showIfDatas.Count == 0 
+						    || ShowIfDecorator.GetShowIfResultFromMaterial(propStaticData.showIfDatas, this.material)))
+				{
 					activePresetDatas.Add(new PersetDynamicData(activePreset, prop));
+				}
 			}
 
 			{
@@ -84,16 +92,6 @@ namespace LWGUI
 
 				var defaultProperties = MaterialEditor.GetMaterialProperties(new[] { defaultMaterial });
 				Debug.Assert(defaultProperties.Length == props.Length);
-
-				// Override default value
-				for (int i = 0; i < props.Length; i++)
-				{
-					Debug.Assert(props[i].name == defaultProperties[i].name);
-					Debug.Assert(!propDynamicDatas.ContainsKey(props[i].name));
-
-					perShaderData.propStaticDatas[props[i].name].baseDrawers
-								 ?.ForEach(baseDrawer => baseDrawer.OverrideDefaultValue(shader, props[i], defaultProperties[i], perShaderData));
-				}
 
 				// Init propDynamicDatas
 				for (int i = 0; i < props.Length; i++)
@@ -132,7 +130,7 @@ namespace LWGUI
 				}
 			}
 
-			// Store Show Modified Props Only Cache
+			// Store "Show Modified Props Only" Caches
 			{
 				if (perShaderData.displayModeData.showOnlyModifiedGroups || perShaderData.displayModeData.showOnlyModifiedProperties)
 				{
@@ -163,21 +161,33 @@ namespace LWGUI
 				// Get ShowIf() results
 				ShowIfDecorator.GetShowIfResult(propStaticData, propDynamicData, this);
 			}
-
-			forceInit = false;
 		}
 
-		public void Update(Shader shader, Material material, MaterialProperty[] props, PerShaderData perShaderData)
+		public void Update(Shader shader, Material material, MaterialEditor editor, MaterialProperty[] props, PerShaderData perShaderData)
 		{
 			if (forceInit)
 			{
-				Init(shader, material, props, perShaderData);
-				return;
+				Init(shader, material, editor, props, perShaderData);
 			}
-
-			foreach (var prop in props)
+			else
 			{
-				propDynamicDatas[prop.name].property = prop;
+				foreach (var prop in props)
+				{
+					propDynamicDatas[prop.name].property = prop;
+				}
+			}
+			
+			// Check animated
+			var renderer = editor.GetRendererForAnimationMode();
+			if (renderer != null)
+			{
+				forceInit = true;
+				foreach (var prop in props)
+				{
+					ReflectionHelper.MaterialAnimationUtility_OverridePropertyColor(prop, renderer, out var color);
+					if (color != Color.white)
+						propDynamicDatas[prop.name].isAnimated = true;
+				}
 			}
 		}
 

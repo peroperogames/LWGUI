@@ -3,6 +3,7 @@
     "rootNamespace": "",
     "references": [
         "LWGUI.Runtime",
+        "LWGUI.Timeline",
         "Unity.InternalAPIEditorBridge.020"
     ],
     "includePlatforms": [

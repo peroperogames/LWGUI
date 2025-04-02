@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Jason Ma
 
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using UnityEditor;
 using UnityEditor.VersionControl;
@@ -9,7 +8,7 @@ using UnityEngine;
 
 namespace LWGUI
 {
-	public class VersionControlHelper
+	public static class VersionControlHelper
 	{
 		public static bool isVCEnabled => Provider.enabled && Provider.isActive;
 
@@ -98,6 +97,29 @@ namespace LWGUI
 			}
 
 			return true;
+		}
+
+		public static bool IsWriteable(UnityEngine.Object obj) => IsWriteable(new[] { obj });
+
+		public static bool IsWriteable(UnityEngine.Object[] objs)
+		{
+			if (objs == null)
+				return false;
+
+			bool isWriteable = true;
+			
+			foreach (var obj in objs)
+			{
+				if (!AssetDatabase.Contains(obj))
+					continue;
+
+				isWriteable &= AssetDatabase.IsOpenForEdit(obj);
+				
+				if (!isWriteable)
+					break;
+			}
+			
+			return isWriteable;
 		}
 	}
 }
