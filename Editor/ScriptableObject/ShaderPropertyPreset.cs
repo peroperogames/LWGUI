@@ -1,13 +1,14 @@
 ﻿// Copyright (c) Jason Ma
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEditor;
 using Object = UnityEngine.Object;
 
 namespace LWGUI
 {
-	[CreateAssetMenu(fileName = "LWGUI_ShaderPropertyPreset.asset", menuName = "LWGUI/Shader Property Preset")]
+	[CreateAssetMenu(fileName = "LWGUI_ShaderPropertyPreset.asset", menuName = "LWGUI/Shader Property Preset", order = 84)]
 	public class ShaderPropertyPreset : ScriptableObject
 	{
 		public enum PropertyType
@@ -17,6 +18,7 @@ namespace LWGUI
 			Float,
 			Range,
 			Texture,
+			Integer,
 		}
 
 		[Serializable]
@@ -30,6 +32,7 @@ namespace LWGUI
 			public string       propertyName;
 			public PropertyType propertyType;
 			public float        floatValue;
+			public int			intValue;
 			public Color        colorValue;
 			public Vector4      vectorValue;
 			public Texture      textureValue;
@@ -70,12 +73,15 @@ namespace LWGUI
 						case PropertyType.Range:
 							material.SetFloat(propertyNameID, floatValue);
 							break;
+						case PropertyType.Integer:
+							material.SetInteger(propertyNameID, intValue);
+							break;
 						case PropertyType.Texture:
 							material.SetTexture(propertyNameID, textureValue);
 							break;
 					}
 
-					MaterialEditor.ApplyMaterialPropertyDrawers(material);
+					UnityEditorExtension.ApplyMaterialPropertyAndDecoratorDrawers(material);
 				}
 				// is Property Primary Material
 				else if (perMaterialData != null)
@@ -93,6 +99,9 @@ namespace LWGUI
 						case PropertyType.Float:
 						case PropertyType.Range:
 							prop.floatValue = floatValue;
+							break;
+						case PropertyType.Integer:
+							prop.intValue = intValue;
 							break;
 						case PropertyType.Texture:
 							prop.textureValue = textureValue;
@@ -116,10 +125,13 @@ namespace LWGUI
 						propertyType = PropertyType.Vector;
 						vectorValue = prop.vectorValue;
 						break;
-					case MaterialProperty.PropType.Int:
 					case MaterialProperty.PropType.Float:
 						propertyType = PropertyType.Float;
 						floatValue = prop.floatValue;
+						break;
+					case MaterialProperty.PropType.Int:
+						propertyType = PropertyType.Integer;
+						intValue = prop.intValue;
 						break;
 					case MaterialProperty.PropType.Range:   
 						propertyType = PropertyType.Range;
@@ -145,6 +157,8 @@ namespace LWGUI
 			public List<PropertyValue> propertyValues   = new List<PropertyValue>();
 			public List<string>        enabledKeywords  = new List<string>();
 			public List<string>        disabledKeywords = new List<string>();
+			public List<string>        enabledPasses  = new List<string>();
+			public List<string>        disabledPasses = new List<string>();
 			public int                 renderQueue      = -1;
 
 
@@ -156,27 +170,39 @@ namespace LWGUI
 					material.EnableKeyword(enabledKeyword);
 				foreach (var disabledKeyword in disabledKeywords)
 					material.DisableKeyword(disabledKeyword);
+				
+				Helper.SetShaderPassEnabled(new Object[] { material }, enabledPasses.Select(s => s.ToUpper()).ToArray(), true);
+				Helper.SetShaderPassEnabled(new Object[] { material }, disabledPasses.Select(s => s.ToUpper()).ToArray(), false);
+				
 				if (renderQueue >= 0)
 					material.renderQueue = renderQueue;
 			}
 
-			public void ApplyToEditingMaterial(UnityEngine.Object[] materials, PerMaterialData perMaterialData)
+			public void ApplyToEditingMaterial(MaterialEditor editor, PerMaterialData perMaterialData)
 			{
-				for (int i = 0; i < materials.Length; i++)
+				for (int i = 0; i < editor.targets.Length; i++)
 				{
-					var material = materials[i] as Material;
+					var material = editor.targets[i] as Material;
 					foreach (var propertyValue in propertyValues)
 						propertyValue.Apply(material, false, i == 0 ? perMaterialData : null);
 					foreach (var enabledKeyword in enabledKeywords)
+					{
 						material.EnableKeyword(enabledKeyword);
+					}
 					foreach (var disabledKeyword in disabledKeywords)
+					{
 						material.DisableKeyword(disabledKeyword);
+					}
+
 					if (renderQueue >= 0)
 						material.renderQueue = renderQueue;
 				}
+				
+				Helper.SetShaderPassEnabled(editor.targets, enabledPasses.Select(s => s.ToUpper()).ToArray(), true);
+				Helper.SetShaderPassEnabled(editor.targets, disabledPasses.Select(s => s.ToUpper()).ToArray(), false);
 			}
 
-			public void ApplyKeywordsToMaterials(UnityEngine.Object[] materials)
+			public void ApplyKeywordsAndPassesToMaterials(Object[] materials)
 			{
 				for (int i = 0; i < materials.Length; i++)
 				{
@@ -186,6 +212,9 @@ namespace LWGUI
 					foreach (var disabledKeyword in disabledKeywords)
 						material.DisableKeyword(disabledKeyword);
 				}
+				
+				Helper.SetShaderPassEnabled(materials, enabledPasses.Select(s => s.ToUpper()).ToArray(), true);
+				Helper.SetShaderPassEnabled(materials, disabledPasses.Select(s => s.ToUpper()).ToArray(), false);
 			}
 
 			public PropertyValue GetPropertyValue(string propName)
@@ -241,8 +270,30 @@ namespace LWGUI
 		}
 
 
-		public List<Preset> presets;
+		[SerializeField]
+		private List<Preset> presets;
 
+		public List<Preset> GetPresets() => presets;
+
+		public int GetPresetCount() => presets?.Count ?? 0;
+
+		public Preset GetPreset(int index)
+		{
+			if (presets == null)
+				return null;
+
+			if (index < presets.Count)
+			{
+				return presets[index];
+			}
+			else
+			{
+				Debug.LogError($"LWGUI: Index ({ index }) is out of range when accessing PresetFile: { name }");
+				return null;
+			}
+		}
+
+		public Preset GetPreset(float index) => GetPreset((int)index);
 		
 		private void OnValidate()
 		{

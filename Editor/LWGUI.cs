@@ -1,4 +1,5 @@
 ﻿// Copyright (c) Jason Ma
+
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -22,13 +23,13 @@ namespace LWGUI
 		/// <summary>
 		/// Called every frame when the content is updated, such as the mouse moving in the material editor
 		/// </summary>
-		public override void OnGUI(MaterialEditor materialEditor, MaterialProperty[] props)
+		public override void OnGUI(MaterialEditor editor, MaterialProperty[] props)
 		{
 			//-----------------------------------------------------------------------------
 			// Init Datas
-			var material = materialEditor.target as Material;
+			var material = editor.target as Material;
 			var shader = material.shader;
-			this.metaDatas = MetaDataHelper.BuildMetaDatas(shader, material, materialEditor, this, props);
+			this.metaDatas = MetaDataHelper.BuildMetaDatas(shader, material, editor, this, props);
 
 
 			//-----------------------------------------------------------------------------
@@ -55,7 +56,7 @@ namespace LWGUI
 			// Draw Properties
 			{
 				// move fields left to make rect for Revert Button
-				materialEditor.SetDefaultGUIWidths();
+				editor.SetDefaultGUIWidths();
 				RevertableHelper.InitRevertableGUIWidths();
 
 				// start drawing properties
@@ -104,7 +105,7 @@ namespace LWGUI
 					EditorGUI.indentLevel = indentLevel;
 				}
 
-				materialEditor.SetDefaultGUIWidths();
+				editor.SetDefaultGUIWidths();
 			}
 
 
@@ -116,10 +117,10 @@ namespace LWGUI
 
 			// Render settings
 			if (SupportedRenderingFeatures.active.editableMaterialRenderQueue)
-				materialEditor.RenderQueueField();
-			materialEditor.EnableInstancingField();
-			materialEditor.LightmapEmissionProperty();
-			materialEditor.DoubleSidedGIField();
+				editor.RenderQueueField();
+			editor.EnableInstancingField();
+			editor.LightmapEmissionProperty();
+			editor.DoubleSidedGIField();
 
 			// Custom Footer
 			if (onDrawCustomFooter != null)
@@ -132,10 +133,11 @@ namespace LWGUI
 
 		private void DrawAdvancedHeader(PropertyStaticData propStaticData, MaterialProperty prop)
 		{
+			EditorGUILayout.Space(3);
 			var rect = EditorGUILayout.GetControlRect();
 			var revertButtonRect = RevertableHelper.SplitRevertButtonRect(ref rect);
 			var label = string.IsNullOrEmpty(propStaticData.advancedHeaderString) ? "Advanced" : propStaticData.advancedHeaderString;
-			propStaticData.isExpanding = EditorGUI.Foldout(rect, propStaticData.isExpanding, label);
+			propStaticData.isExpanding = EditorGUI.Foldout(rect, propStaticData.isExpanding, label, EditorStyles.foldoutHeader);
 			if (Event.current.type == EventType.MouseDown && Event.current.button == 0 && rect.Contains(Event.current.mousePosition))
 				propStaticData.isExpanding = !propStaticData.isExpanding;
 			RevertableHelper.DrawRevertableProperty(revertButtonRect, prop, metaDatas, true);
@@ -146,6 +148,9 @@ namespace LWGUI
 		{
 			var (propStaticData, propDynamicData) = metaDatas.GetPropDatas(prop);
 			var materialEditor = metaDatas.GetMaterialEditor();
+			
+			if (propStaticData.isAdvancedHeaderProperty)
+				EditorGUILayout.Space(3);
 
 			Helper.DrawHelpbox(propStaticData, propDynamicData);
 
@@ -181,11 +186,36 @@ namespace LWGUI
 				MetaDataHelper.ReleaseMaterialMetadataCache(material);
 		}
 
-		// Called after editing the material
+		public static void OnValidate(Object[] materials)
+		{
+			VersionControlHelper.Checkout(materials);
+			UnityEditorExtension.ApplyMaterialPropertyAndDecoratorDrawers(materials);
+			MetaDataHelper.ForceUpdateMaterialsMetadataCache(materials);
+		}
+		
+		// Called after edit in code
+		public static void OnValidate(LWGUIMetaDatas metaDatas)
+		{
+			OnValidate(metaDatas?.GetMaterialEditor()?.targets);
+		}
+		
+		// Called after Edit/Undo/MaterialEditor.GetMaterialProperties()
 		public override void ValidateMaterial(Material material)
 		{
 			base.ValidateMaterial(material);
-			metaDatas?.OnValidate();
+
+			// Undo/Edit in Timeline
+			// Note: When modifying the material in Timeline in Unity 2022, this function cannot correctly obtain the modified value.
+			if (metaDatas == null)
+			{
+				// OnValidate(new Object[] { material });
+				MetaDataHelper.ForceUpdateMaterialMetadataCache(material);
+			}
+			// Edit
+			else
+			{
+				OnValidate(metaDatas);
+			}
 		}
 	}
-} //namespace LWGUI
+}

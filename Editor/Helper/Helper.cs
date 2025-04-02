@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using LWGUI.Timeline;
 using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -13,81 +14,84 @@ namespace LWGUI
 	/// <summary>
 	/// Misc Function
 	/// </summary>
-	public class Helper
+	public static class Helper
 	{
-		#region Engine Misc
+		#region Math
 
-		public static void ObsoleteWarning(string obsoleteStr, string newStr)
-		{
-			Debug.LogWarning("LWGUI: '" + obsoleteStr + "' is Obsolete! Please use '" + newStr + "'!");
-		}
+		public const double Float_Epsilon = 1e-10;
 
+		public static bool Approximately(float a, float b) => Mathf.Abs(a - b) < Float_Epsilon;
+		
 		public static bool PropertyValueEquals(MaterialProperty prop1, MaterialProperty prop2)
 		{
 			if (prop1.textureValue == prop2.textureValue
 			 && prop1.vectorValue == prop2.vectorValue
 			 && prop1.colorValue == prop2.colorValue
-			 && prop1.floatValue == prop2.floatValue
+			 && Approximately(prop1.floatValue, prop2.floatValue)
 			 && prop1.intValue == prop2.intValue
 			   )
 				return true;
 			else
 				return false;
 		}
+		
+		#endregion
 
+		#region Engine Misc
+		
 		public static bool IsPropertyHideInInspector(MaterialProperty prop)
 		{
 			return (prop.flags & MaterialProperty.PropFlags.HideInInspector) != 0;
 		}
 
-		public static string GetKeyWord(string keyWord, string propName)
+		public static string GetKeywordName(string keyword, string propName)
 		{
 			string k;
-			if (string.IsNullOrEmpty(keyWord) || keyWord == "__")
+			if (string.IsNullOrEmpty(keyword) || keyword == "__")
 			{
 				k = propName.ToUpperInvariant() + "_ON";
 			}
 			else
 			{
-				k = keyWord.ToUpperInvariant();
+				k = keyword.ToUpperInvariant();
 			}
 			return k;
 		}
 
-		public static void SetShaderKeyWord(Object[] materials, string keyWord, bool isEnable)
+		public static void SetShaderKeywordEnabled(Object[] materials, string keywordName, bool isEnable)
 		{
-			if (string.IsNullOrEmpty(keyWord) || string.IsNullOrEmpty(keyWord)) return;
+			if (string.IsNullOrEmpty(keywordName) || string.IsNullOrEmpty(keywordName)) return;
 
 			foreach (Material m in materials)
 			{
 				// delete "_" keywords
-				if (keyWord == "_")
+				if (keywordName == "_")
 				{
-					if (m.IsKeywordEnabled(keyWord))
+					if (m.IsKeywordEnabled(keywordName))
 					{
-						m.DisableKeyword(keyWord);
+						m.DisableKeyword(keywordName);
 					}
 					continue;
 				}
 
-				if (m.IsKeywordEnabled(keyWord))
+				if (m.IsKeywordEnabled(keywordName))
 				{
-					if (!isEnable) m.DisableKeyword(keyWord);
+					if (!isEnable) m.DisableKeyword(keywordName);
 				}
 				else
 				{
-					if (isEnable) m.EnableKeyword(keyWord);
+					if (isEnable) m.EnableKeyword(keywordName);
 				}
 			}
 		}
 
-		public static void SetShaderKeyWord(Object[] materials, string[] keyWords, int index)
+		public static void SelectShaderKeyword(Object[] materials, string[] keywordNames, int index)
 		{
-			Debug.Assert(keyWords.Length >= 1 && index < keyWords.Length && index >= 0,
-						 "KeyWords Length: " + keyWords.Length + " or Index: " + index + " Error! ");
-			for (int i = 0; i < keyWords.Length; i++)
+			Debug.Assert(keywordNames.Length >= 1 && index < keywordNames.Length && index >= 0,
+						 "KeyWords Length: " + keywordNames.Length + " or Index: " + index + " Error! ");
+			for (int i = 0; i < keywordNames.Length; i++)
 			{
-				SetShaderKeyWord(materials, keyWords[i], index == i);
+				SetShaderKeywordEnabled(materials, keywordNames[i], index == i);
 			}
 		}
 
@@ -223,7 +227,7 @@ namespace LWGUI
 		#endregion
 
 
-		#region Draw GUI for Drawer
+		#region Draw GUI for Drawers
 
 		// TODO: use Reflection
 		// copy and edit of https://github.com/GucioDevs/SimpleMinMaxSlider/blob/master/Assets/SimpleMinMaxSlider/Scripts/Editor/MinMaxSliderDrawer.cs
@@ -294,10 +298,25 @@ namespace LWGUI
 			return toggleValue;
 		}
 
+		public static bool ToggleButton(Rect position, GUIContent label, bool on, GUIStyle style = null, float padding = 0)
+		{
+			var paddedRect = new Rect(position.x + padding, position.y, position.width - padding * 2, position.height);
+			style ??= EditorStyles.miniButton;
+			
+			bool flag = GUI.Button(paddedRect, label, style);
+			if (Event.current.type == EventType.Repaint)
+			{
+				bool isHover = paddedRect.Contains(Event.current.mousePosition);
+				style.Draw(position, label, isHover, false, on, false);
+			}
+
+			return flag;
+		}
+
 		#endregion
 
 
-		#region Draw GUI for Material
+		#region Draw GUI for Materials
 
 		public static void DrawSplitLine()
 		{
@@ -325,8 +344,9 @@ namespace LWGUI
 		}
 
 		private static Texture _logoCache;
+		private static GUIContent _logoGuiContentCache;
 		private static Texture _logo => _logoCache = _logoCache ?? AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath("26b9d845eb7b1a747bf04dc84e5bcc2c"));
-		private static GUIContent _logoGuiContent = new GUIContent(string.Empty, _logo,
+		private static GUIContent _logoGuiContent => _logoGuiContentCache = _logoGuiContentCache ?? new GUIContent(string.Empty, _logo,
 																   "LWGUI (Light Weight Shader GUI)\n\n"
 																 + "A Lightweight, Flexible, Powerful Unity Shader GUI system.\n\n"
 																 + "Copyright (c) Jason Ma");
@@ -352,21 +372,37 @@ namespace LWGUI
 		private static Material     _copiedMaterial;
 		private static List<string> _copiedProps = new List<string>();
 
-		private static Texture _iconCopy       = AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath("9cdef444d18d2ce4abb6bbc4fed4d109"));
-		private static Texture _iconPaste      = AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath("8e7a78d02e4c3574998524a0842a8ccb"));
-		private static Texture _iconSelect     = AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath("6f44e40b24300974eb607293e4224ecc"));
-		private static Texture _iconCheckout   = AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath("72488141525eaa8499e65e52755cb6d0"));
-		private static Texture _iconExpand     = AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath("2382450e7f4ddb94c9180d6634c41378"));
-		private static Texture _iconCollapse   = AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath("929b6e5dfacc42b429d715a3e1ca2b57"));
-		private static Texture _iconVisibility = AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath("9576e23a695b35d49a9fc55c9a948b4f"));
+		private const string _iconCopyGUID       = "9cdef444d18d2ce4abb6bbc4fed4d109";
+		private const string _iconPasteGUID      = "8e7a78d02e4c3574998524a0842a8ccb";
+		private const string _iconSelectGUID     = "6f44e40b24300974eb607293e4224ecc";
+		private const string _iconCheckoutGUID   = "72488141525eaa8499e65e52755cb6d0";
+		private const string _iconExpandGUID     = "2382450e7f4ddb94c9180d6634c41378";
+		private const string _iconCollapseGUID   = "929b6e5dfacc42b429d715a3e1ca2b57";
+		private const string _iconVisibilityGUID = "9576e23a695b35d49a9fc55c9a948b4f";
 
-		private static GUIContent _guiContentCopy       = new GUIContent("", _iconCopy, "Copy Material Properties");
-		private static GUIContent _guiContentPaste      = new GUIContent("", _iconPaste, "Paste Material Properties\n\nRight-click to paste values by type.");
-		private static GUIContent _guiContentSelect     = new GUIContent("", _iconSelect, "Select the Material Asset\n\nUsed to jump from a Runtime Material Instance to a Material Asset.");
-		private static GUIContent _guiContentChechout   = new GUIContent("", _iconCheckout, "Checkout selected Material Assets");
-		private static GUIContent _guiContentExpand     = new GUIContent("", _iconExpand, "Expand All Groups");
-		private static GUIContent _guiContentCollapse   = new GUIContent("", _iconCollapse, "Collapse All Groups");
-		private static GUIContent _guiContentVisibility = new GUIContent("", _iconVisibility, "Display Mode");
+		private const string _iconCopyTooltip       = "Copy Material Properties";
+		private const string _iconPasteTooltip      = "Paste Material Properties\n\nRight-click to paste values by type.";
+		private const string _iconSelectTooltip     = "Select the Material Asset\n\nUsed to jump from a Runtime Material Instance to a Material Asset.";
+		private const string _iconCheckoutTooltip   = "Checkout selected Material Assets";
+		private const string _iconExpandTooltip     = "Expand All Groups";
+		private const string _iconCollapseTooltip   = "Collapse All Groups";
+		private const string _iconVisibilityTooltip = "Display Mode";
+
+		private static GUIContent _guiContentCopyCache;
+		private static GUIContent _guiContentPasteCache;
+		private static GUIContent _guiContentSelectCache;
+		private static GUIContent _guiContentChechoutCache;
+		private static GUIContent _guiContentExpandCache;
+		private static GUIContent _guiContentCollapseCache;
+		private static GUIContent _guiContentVisibilityCache;
+		
+		private static GUIContent _guiContentCopy       => _guiContentCopyCache = _guiContentCopyCache ?? new GUIContent("", AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath(_iconCopyGUID)), _iconCopyTooltip);
+		private static GUIContent _guiContentPaste      => _guiContentPasteCache = _guiContentPasteCache ?? new GUIContent("", AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath(_iconPasteGUID)), _iconPasteTooltip);
+		private static GUIContent _guiContentSelect     => _guiContentSelectCache = _guiContentSelectCache ?? new GUIContent("", AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath(_iconSelectGUID)), _iconSelectTooltip);
+		private static GUIContent _guiContentChechout   => _guiContentChechoutCache = _guiContentChechoutCache ?? new GUIContent("", AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath(_iconCheckoutGUID)), _iconCheckoutTooltip);
+		private static GUIContent _guiContentExpand     => _guiContentExpandCache = _guiContentExpandCache ?? new GUIContent("", AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath(_iconExpandGUID)), _iconExpandTooltip);
+		private static GUIContent _guiContentCollapse   => _guiContentCollapseCache = _guiContentCollapseCache ?? new GUIContent("", AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath(_iconCollapseGUID)), _iconCollapseTooltip);
+		private static GUIContent _guiContentVisibility => _guiContentVisibilityCache = _guiContentVisibilityCache ?? new GUIContent("", AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath(_iconVisibilityGUID)), _iconVisibilityTooltip);
 
 
 		private enum CopyMaterialValueMask
@@ -612,7 +648,7 @@ namespace LWGUI
 			toolBarRect.xMin += 2;
 		}
 
-		public static Func<MeshRenderer, Material, Material> onFindMaterialAssetInRendererByMaterialInstance;
+		public static Func<Renderer, Material, Material> onFindMaterialAssetInRendererByMaterialInstance;
 		
 		private static bool FindMaterialAssetByMaterialInstance(Material material, LWGUIMetaDatas metaDatas, out Material materialAsset)
 		{
@@ -882,22 +918,27 @@ namespace LWGUI
 				menus.AddSeparator("");
 				foreach (var activePresetData in perMaterialData.activePresetDatas)
 				{
+					// Cull self
 					if (activePresetData.property == prop) continue;
 
 					var activePreset = activePresetData.preset;
-					var presetAsset = perShaderData.propStaticDatas[activePresetData.property.name].propertyPresetAsset;
-					var presetPropDisplayName = perShaderData.propStaticDatas[activePresetData.property.name].displayName;
+					var (presetPropStaticData, presetPropDynamicData) = metaDatas.GetPropDatas(activePresetData.property);
+					var presetAsset = presetPropStaticData.propertyPresetAsset;
+					var presetPropDisplayName = presetPropStaticData.displayName;
+					
+					// Cull invisible presets
+					if (!presetPropDynamicData.isShowing) continue;
 
 					if (activePreset.GetPropertyValue(prop.name) != null)
 					{
-						menus.AddItem(new GUIContent("Update to Preset/" + presetPropDisplayName + "/" + "All"), false, () => EditPresetEvent("Update", presetAsset, presetAsset.presets, prop, metaDatas));
+						menus.AddItem(new GUIContent("Update to Preset/" + presetPropDisplayName + "/" + "All"), false, () => EditPresetEvent("Update", presetAsset, presetAsset.GetPresets(), prop, metaDatas));
 						menus.AddItem(new GUIContent("Update to Preset/" + presetPropDisplayName + "/" + activePreset.presetName), false, () => EditPresetEvent("Update", presetAsset, new List<ShaderPropertyPreset.Preset>(){activePreset}, prop, metaDatas));
-						menus.AddItem(new GUIContent("Remove from Preset/" + presetPropDisplayName + "/" + "All"), false, () => EditPresetEvent("Remove", presetAsset, presetAsset.presets, prop, metaDatas));
+						menus.AddItem(new GUIContent("Remove from Preset/" + presetPropDisplayName + "/" + "All"), false, () => EditPresetEvent("Remove", presetAsset, presetAsset.GetPresets(), prop, metaDatas));
 						menus.AddItem(new GUIContent("Remove from Preset/" + presetPropDisplayName + "/" + activePreset.presetName), false, () => EditPresetEvent("Remove", presetAsset, new List<ShaderPropertyPreset.Preset>(){activePreset}, prop, metaDatas));
 					}
 					else
 					{
-						menus.AddItem(new GUIContent("Add to Preset/" + presetPropDisplayName + "/" + "All"), false, () => EditPresetEvent("Add", presetAsset, presetAsset.presets, prop, metaDatas));
+						menus.AddItem(new GUIContent("Add to Preset/" + presetPropDisplayName + "/" + "All"), false, () => EditPresetEvent("Add", presetAsset, presetAsset.GetPresets(), prop, metaDatas));
 						menus.AddItem(new GUIContent("Add to Preset/" + presetPropDisplayName + "/" + activePreset.presetName), false, () => EditPresetEvent("Add", presetAsset, new List<ShaderPropertyPreset.Preset>(){activePreset}, prop, metaDatas));
 					}
 				}
