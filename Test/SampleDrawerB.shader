@@ -12,6 +12,7 @@
 		[Main(Group1, _KEYWORD, on)] _group1 ("Group - Default Open", float) = 1
 		[Preset(Group1, LWGUI_ShaderPropertyPreset)] _preset ("Preset Sample", float) = 0
 		[Preset(Group1, LWGUI_ShaderPropertyPreset1)] _preset1 ("Preset Sample 1", float) = 0
+		[SubToggle(Group1, _, LWGUI_Preset_Toggle)] _preset_toggle ("Preset Toggle Sample", float) = 0
 		[Sub(Group1)] _float1 ("Sub Float", float) = 0
 		[Sub(Group1)] _vector1 ("Sub Vector", vector) = (1, 1, 1, 1)
 		[Sub(Group1)] [HDR] _color1 ("Sub HDR Color", color) = (0.7, 0.7, 1, 1)
@@ -36,7 +37,7 @@
 		[Advanced][Tex(Group2, _AdvancedColor0)] _AdvancedTex1 ("Advanced Tex 1", 2D) = "white" { }
 		[Advanced][HideInInspector] _AdvancedColor0 ("Advanced Color 0", Color) = (1, 1, 1, 1)
 		[AdvancedHeaderProperty][Sub(Group2)] _AdvancedFloat ("Advanced Image", float) = 0
-		[Advanced][Image(Group2)] _AdvancedImage ("Advanced Image", 2D) = "white" { }
+		[Advanced][Image(Group2)] _AdvancedImage ("../image-20220828003810353.png", float) = 0
 
 		[Title(Channel Samples)]
 		[Channel] _textureChannelMask ("Texture Channel Mask (Default G)", Vector) = (0, 1, 0, 0)
@@ -76,6 +77,9 @@
 		[MinMaxSlider(_rangeStart, _rangeEnd)] _minMaxSlider ("Min Max Slider (0 - 1)", Range(0.0, 1.0)) = 1.0
 		_rangeStart ("Range Start", Range(0.0, 0.5)) = 0.0
 		[PowerSlider(10)] _rangeEnd ("Range End PowerSlider", Range(0.5, 1.0)) = 1.0
+		
+		[Title(Button Samples)]
+		[Button(_)] _button0 ("URL Button@URL:https://github.com/JasonMa0012/LWGUI@C# Button@C#:LWGUI.ButtonDrawer.TestMethod(1234, abcd)", Float) = 0
 	}
 	
 	HLSLINCLUDE
