@@ -97,7 +97,7 @@ MonoBehaviour:
     enabledPasses: []
     disabledPasses: []
     renderQueue: -1
-  - presetName: "\u7C7B\u53E0\u52A0"
+  - presetName: "\u7C7B\u7EBF\u6027\u51CF\u6DE1"
     propertyValues:
     - propertyName: _SrcBlend
       propertyType: 2
@@ -116,62 +116,6 @@ MonoBehaviour:
     - propertyName: _BlendOp
       propertyType: 2
       floatValue: 0
-      intValue: 0
-      colorValue: {r: 0, g: 0, b: 0, a: 0}
-      vectorValue: {x: 0, y: 0, z: 0, w: 0}
-      textureValue: {fileID: 0}
-    enabledKeywords: []
-    disabledKeywords: []
-    enabledPasses: []
-    disabledPasses: []
-    renderQueue: -1
-  - presetName: "\u7C7B\u4F3C\u989C\u8272\u52A0\u6DF1"
-    propertyValues:
-    - propertyName: _SrcBlend
-      propertyType: 2
-      floatValue: 1
-      intValue: 0
-      colorValue: {r: 0, g: 0, b: 0, a: 0}
-      vectorValue: {x: 0, y: 0, z: 0, w: 0}
-      textureValue: {fileID: 0}
-    - propertyName: _DstBlend
-      propertyType: 2
-      floatValue: 1
-      intValue: 0
-      colorValue: {r: 0, g: 0, b: 0, a: 0}
-      vectorValue: {x: 0, y: 0, z: 0, w: 0}
-      textureValue: {fileID: 0}
-    - propertyName: _BlendOp
-      propertyType: 2
-      floatValue: 2
-      intValue: 0
-      colorValue: {r: 0, g: 0, b: 0, a: 0}
-      vectorValue: {x: 0, y: 0, z: 0, w: 0}
-      textureValue: {fileID: 0}
-    enabledKeywords: []
-    disabledKeywords: []
-    enabledPasses: []
-    disabledPasses: []
-    renderQueue: -1
-  - presetName: "\u7C7B\u989C\u8272\u51CF\u6DE1"
-    propertyValues:
-    - propertyName: _SrcBlend
-      propertyType: 2
-      floatValue: 1
-      intValue: 0
-      colorValue: {r: 0, g: 0, b: 0, a: 0}
-      vectorValue: {x: 0, y: 0, z: 0, w: 0}
-      textureValue: {fileID: 0}
-    - propertyName: _DstBlend
-      propertyType: 2
-      floatValue: 1
-      intValue: 0
-      colorValue: {r: 0, g: 0, b: 0, a: 0}
-      vectorValue: {x: 0, y: 0, z: 0, w: 0}
-      textureValue: {fileID: 0}
-    - propertyName: _BlendOp
-      propertyType: 2
-      floatValue: 4
       intValue: 0
       colorValue: {r: 0, g: 0, b: 0, a: 0}
       vectorValue: {x: 0, y: 0, z: 0, w: 0}
@@ -200,6 +144,90 @@ MonoBehaviour:
     - propertyName: _BlendOp
       propertyType: 2
       floatValue: 3
+      intValue: 0
+      colorValue: {r: 0, g: 0, b: 0, a: 0}
+      vectorValue: {x: 0, y: 0, z: 0, w: 0}
+      textureValue: {fileID: 0}
+    enabledKeywords: []
+    disabledKeywords: []
+    enabledPasses: []
+    disabledPasses: []
+    renderQueue: -1
+  - presetName: "\u7C7B\u53D8\u4EAE"
+    propertyValues:
+    - propertyName: _SrcBlend
+      propertyType: 2
+      floatValue: 1
+      intValue: 0
+      colorValue: {r: 0, g: 0, b: 0, a: 0}
+      vectorValue: {x: 0, y: 0, z: 0, w: 0}
+      textureValue: {fileID: 0}
+    - propertyName: _DstBlend
+      propertyType: 2
+      floatValue: 1
+      intValue: 0
+      colorValue: {r: 0, g: 0, b: 0, a: 0}
+      vectorValue: {x: 0, y: 0, z: 0, w: 0}
+      textureValue: {fileID: 0}
+    - propertyName: _BlendOp
+      propertyType: 2
+      floatValue: 4
+      intValue: 0
+      colorValue: {r: 0, g: 0, b: 0, a: 0}
+      vectorValue: {x: 0, y: 0, z: 0, w: 0}
+      textureValue: {fileID: 0}
+    enabledKeywords: []
+    disabledKeywords: []
+    enabledPasses: []
+    disabledPasses: []
+    renderQueue: -1
+  - presetName: "\u51CF\u6CD5"
+    propertyValues:
+    - propertyName: _SrcBlend
+      propertyType: 2
+      floatValue: 1
+      intValue: 0
+      colorValue: {r: 0, g: 0, b: 0, a: 0}
+      vectorValue: {x: 0, y: 0, z: 0, w: 0}
+      textureValue: {fileID: 0}
+    - propertyName: _DstBlend
+      propertyType: 2
+      floatValue: 1
+      intValue: 0
+      colorValue: {r: 0, g: 0, b: 0, a: 0}
+      vectorValue: {x: 0, y: 0, z: 0, w: 0}
+      textureValue: {fileID: 0}
+    - propertyName: _BlendOp
+      propertyType: 2
+      floatValue: 2
+      intValue: 0
+      colorValue: {r: 0, g: 0, b: 0, a: 0}
+      vectorValue: {x: 0, y: 0, z: 0, w: 0}
+      textureValue: {fileID: 0}
+    enabledKeywords: []
+    disabledKeywords: []
+    enabledPasses: []
+    disabledPasses: []
+    renderQueue: -1
+  - presetName: "\u666E\u901A\u900F\u660E"
+    propertyValues:
+    - propertyName: _SrcBlend
+      propertyType: 2
+      floatValue: 5
+      intValue: 0
+      colorValue: {r: 0, g: 0, b: 0, a: 0}
+      vectorValue: {x: 0, y: 0, z: 0, w: 0}
+      textureValue: {fileID: 0}
+    - propertyName: _DstBlend
+      propertyType: 2
+      floatValue: 10
+      intValue: 0
+      colorValue: {r: 0, g: 0, b: 0, a: 0}
+      vectorValue: {x: 0, y: 0, z: 0, w: 0}
+      textureValue: {fileID: 0}
+    - propertyName: _BlendOp
+      propertyType: 2
+      floatValue: 0
       intValue: 0
       colorValue: {r: 0, g: 0, b: 0, a: 0}
       vectorValue: {x: 0, y: 0, z: 0, w: 0}
