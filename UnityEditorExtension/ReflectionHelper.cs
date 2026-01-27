@@ -1,4 +1,4 @@
-﻿// Copyright (c) Jason Ma
+// Copyright (c) Jason Ma
 
 using System;
 using System.Collections.Generic;
@@ -16,15 +16,14 @@ namespace LWGUI
         #region MaterialPropertyHandler
 
         private static readonly Type MaterialPropertyHandler_Type = Assembly.GetAssembly(typeof(Editor)).GetType("UnityEditor.MaterialPropertyHandler");
-        private static readonly MethodInfo MaterialPropertyHandler_GetHandler_Method = MaterialPropertyHandler_Type.GetMethod("GetHandler", BindingFlags.Static | BindingFlags.NonPublic);
         private static readonly PropertyInfo MaterialPropertyHandler_PropertyDrawer_Property = MaterialPropertyHandler_Type.GetProperty("propertyDrawer");
         private static readonly FieldInfo MaterialPropertyHandler_DecoratorDrawers_Field = MaterialPropertyHandler_Type.GetField("m_DecoratorDrawers", BindingFlags.NonPublic | BindingFlags.Instance);
 
         public static MaterialPropertyDrawer GetPropertyDrawer(Shader shader, MaterialProperty prop, out List<MaterialPropertyDrawer> decoratorDrawers)
         {
             decoratorDrawers = new List<MaterialPropertyDrawer>();
-            var handler = MaterialPropertyHandler_GetHandler_Method.Invoke(null, new object[] { shader, prop.name });
-            if (handler != null && handler.GetType() == MaterialPropertyHandler_Type)
+            var handler = MaterialPropertyHandler.GetHandler(shader, prop.name);
+            if (handler != null)
             {
                 decoratorDrawers = MaterialPropertyHandler_DecoratorDrawers_Field.GetValue(handler) as List<MaterialPropertyDrawer>;
                 return MaterialPropertyHandler_PropertyDrawer_Property.GetValue(handler, null) as MaterialPropertyDrawer;
@@ -38,6 +37,12 @@ namespace LWGUI
             return GetPropertyDrawer(shader, prop, out _);
         }
 
+        public static void InvalidatePropertyCache(Shader shader)
+        {
+            MaterialPropertyHandler.InvalidatePropertyCache(shader);
+        }
+
+
         #endregion
 
 
@@ -45,6 +50,8 @@ namespace LWGUI
 
         private static readonly Type MaterialEditor_Type = typeof(MaterialEditor);
         private static readonly PropertyInfo MaterialEditor_RendererForAnimationMode_Property = MaterialEditor_Type.GetProperty("rendererForAnimationMode", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly MethodInfo MaterialEditor_TexturePropertyBody_Method = MaterialEditor_Type.GetMethod("TexturePropertyBody", BindingFlags.NonPublic | BindingFlags.Instance);
+
 
         public static float DoPowerRangeProperty(Rect position, MaterialProperty prop, GUIContent label, float power)
         {
@@ -77,6 +84,11 @@ namespace LWGUI
         public static Renderer GetRendererForAnimationMode(this MaterialEditor materialEditor)
         {
             return MaterialEditor_RendererForAnimationMode_Property.GetValue(materialEditor, null) as Renderer;
+        }
+
+        public static Texture TexturePropertyBody(this MaterialEditor materialEditor, Rect position, MaterialProperty prop)
+        {
+            return MaterialEditor_TexturePropertyBody_Method.Invoke(materialEditor, new object[] { position, prop }) as Texture;
         }
 
         #endregion
@@ -234,6 +246,11 @@ namespace LWGUI
             return (float)GetTime_Method.Invoke(gradientEditor, new object[] { actualTime });
         }
 
+        public static void PopupWindowWithoutFocus_Hide()
+        {
+            PopupWindowWithoutFocus.Hide();
+        }
+        
         #endregion
 
         #region CurveEditor
@@ -249,6 +266,58 @@ namespace LWGUI
         internal static CurveSelection AddKeyAtTime(this CurveEditor curveEditor, CurveWrapper cw, float time)
         {
             return AddKeyAtTime_Method.Invoke(curveEditor, new object[] { cw, time }) as CurveSelection;
+        }
+
+        #endregion
+
+
+        #region Type Lookup
+
+        private static Dictionary<string, Type> _typeCache = new Dictionary<string, Type>();
+
+        /// <summary>
+        /// Get a Type by its name, searching all loaded assemblies.
+        /// Supports both full type name (Namespace.ClassName) and simple type name.
+        /// </summary>
+        public static Type GetTypeByName(string typeName)
+        {
+            if (string.IsNullOrEmpty(typeName))
+                return null;
+
+            if (_typeCache.TryGetValue(typeName, out var cachedType))
+                return cachedType;
+
+            // Try to get type directly
+            var type = Type.GetType(typeName);
+            if (type != null)
+            {
+                _typeCache[typeName] = type;
+                return type;
+            }
+
+            // Search in all loaded assemblies
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                type = assembly.GetType(typeName);
+                if (type != null)
+                {
+                    _typeCache[typeName] = type;
+                    return type;
+                }
+
+                // Try to find by simple name (without namespace)
+                foreach (var t in assembly.GetTypes())
+                {
+                    if (t.Name == typeName || t.FullName == typeName)
+                    {
+                        _typeCache[typeName] = t;
+                        return t;
+                    }
+                }
+            }
+
+            _typeCache[typeName] = null;
+            return null;
         }
 
         #endregion

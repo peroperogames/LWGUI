@@ -1,6 +1,7 @@
-﻿// Copyright (c) Jason Ma
+// Copyright (c) Jason Ma
 
 using System;
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using LWGUI.Runtime.LwguiGradient;
@@ -10,6 +11,7 @@ namespace LWGUI.LwguiGradientEditor
     public static class LwguiGradientEditorHelper
     {
         private static readonly int s_LwguiGradientHash = "s_LwguiGradientHash".GetHashCode();
+        private static readonly int s_LwguiGradientPreviewHash = "s_LwguiGradientPreviewHash".GetHashCode();
         private static int s_LwguiGradientID;
 
         // GradientEditor.DrawGradientWithBackground()
@@ -132,14 +134,15 @@ namespace LWGUI.LwguiGradientEditor
         }
 
         /// Lwgui Gradient Field with full Undo/Redo/ContextMenu functions
-        public static void GradientField(Rect position, GUIContent label, SerializedProperty property, LwguiGradient gradient, 
+        public static void GradientField(Rect position, GUIContent label, SerializedProperty property, 
             ColorSpace colorSpace = ColorSpace.Gamma, 
             LwguiGradient.ChannelMask viewChannelMask = LwguiGradient.ChannelMask.All, 
             LwguiGradient.GradientTimeRange timeRange = LwguiGradient.GradientTimeRange.One)
         {
             label = EditorGUI.BeginProperty(position, label, property);
             EditorGUI.BeginChangeCheck();
-            
+
+            var gradient = property.GetLwguiGradientValue();
             GradientField(position, label, gradient, colorSpace, viewChannelMask, timeRange, 
                 () => LwguiGradientWindow.RegisterSerializedObjectUndo(property.serializedObject.targetObject));
 
@@ -147,15 +150,69 @@ namespace LWGUI.LwguiGradientEditor
             {
                 GUI.changed = true;
                 LwguiGradientWindow.RegisterSerializedObjectUndo(property.serializedObject.targetObject);
+                if (LwguiGradientWindow.instance)
+                    property.SetLwguiGradientValue(LwguiGradientWindow.instance.lwguiGradient);
             }
             EditorGUI.EndProperty();
+        }
+        
+        /// <summary>
+        /// Draw a clickable gradient preview that opens the gradient editor when clicked.
+        /// This method handles change detection and Undo/Redo like GradientEditButton.
+        /// </summary>
+        public static bool GradientPreviewField(Rect rect, LwguiGradient gradient, 
+            ColorSpace colorSpace, 
+            LwguiGradient.ChannelMask viewChannelMask, 
+            LwguiGradient.GradientTimeRange timeRange,
+            LwguiGradientWindow.ChangeGradientCallback onChange = null)
+        {
+            int id = GUIUtility.GetControlID(s_LwguiGradientPreviewHash, FocusType.Keyboard, rect);
+            var evt = Event.current;
+            
+            // When drawing the modifying Gradient Field and it has changed
+            if ((GUIUtility.keyboardControl == id || s_LwguiGradientID == id)
+                && evt.GetTypeForControl(id) == EventType.ExecuteCommand 
+                && evt.commandName == LwguiGradientWindow.LwguiGradientChangedCommand)
+            {
+                GUI.changed = true;
+                HandleUtility.Repaint();
+            }
+
+            // Sync Undo/Redo result to editor window
+            if (s_LwguiGradientID == id 
+                && evt.commandName == "UndoRedoPerformed")
+            {
+                LwguiGradientWindow.UpdateCurrentGradient(gradient);
+            }
+            
+            // Draw gradient preview
+            if (evt.type == EventType.Repaint)
+            {
+                DrawGradientWithSeparateAlphaChannel(rect, gradient, colorSpace, viewChannelMask);
+            }
+            
+            // Handle click to open editor
+            bool clicked = false;
+            if (evt.type == EventType.MouseDown && evt.button == 0 && rect.Contains(evt.mousePosition))
+            {
+                clicked = true;
+                evt.Use();
+                
+                s_LwguiGradientID = id;
+                GUIUtility.keyboardControl = id;
+                LwguiGradientWindow.Show(gradient, colorSpace, viewChannelMask, timeRange, GUIView.current, onChange);
+                GUIUtility.ExitGUI();
+            }
+            
+            return clicked;
         }
 
         public static bool GradientEditButton(Rect position, GUIContent icon, LwguiGradient gradient,
             ColorSpace colorSpace = ColorSpace.Gamma,
             LwguiGradient.ChannelMask viewChannelMask = LwguiGradient.ChannelMask.All,
             LwguiGradient.GradientTimeRange timeRange = LwguiGradient.GradientTimeRange.One,
-            Func<bool> shouldOpenWindowAfterClickingEvent = null)
+            Func<bool> shouldOpenWindowAfterClickingEvent = null,
+            LwguiGradientWindow.ChangeGradientCallback onChange = null)
         {
             int id = GUIUtility.GetControlID(s_LwguiGradientHash, FocusType.Keyboard, position);
             var evt = Event.current;
@@ -184,12 +241,36 @@ namespace LWGUI.LwguiGradientEditor
                 {
                     s_LwguiGradientID = id;
                     GUIUtility.keyboardControl = id;
-                    LwguiGradientWindow.Show(gradient, colorSpace, viewChannelMask, timeRange, GUIView.current);
+                    LwguiGradientWindow.Show(gradient, colorSpace, viewChannelMask, timeRange, GUIView.current, onChange);
                     GUIUtility.ExitGUI();
                 }
             }
             
             return clicked;
+        }
+
+        public static LwguiGradient GetLwguiGradientValue(this SerializedProperty property)
+        {
+            LwguiGradient lwguiGradient = new();
+            
+            var curversProp = property.FindPropertyRelative("_curves");
+            for (int i = 0; i < curversProp.arraySize; i++)
+            {
+                var curveProp = curversProp.GetArrayElementAtIndex(i);
+                lwguiGradient.rawCurves[i] = curveProp.animationCurveValue;
+            }
+
+            return lwguiGradient;
+        }
+
+        public static void SetLwguiGradientValue(this SerializedProperty property, LwguiGradient lwguiGradient)
+        {
+            var curversProp = property.FindPropertyRelative("_curves");
+            for (int i = 0; i < curversProp.arraySize && i < lwguiGradient.rawCurves.Count; i++)
+            {
+                var curveProp = curversProp.GetArrayElementAtIndex(i);
+                curveProp.animationCurveValue = lwguiGradient.rawCurves[i];
+            }
         }
     }
 }

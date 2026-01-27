@@ -7,7 +7,7 @@ namespace LWGUI
 {
 	public class PresetHelper
 	{
-		private static Dictionary<string /*FileName*/, ShaderPropertyPreset> _loadedPresets = new Dictionary<string, ShaderPropertyPreset>();
+		private static Dictionary<string /*FileName*/, LwguiShaderPropertyPreset> _loadedPresets = new Dictionary<string, LwguiShaderPropertyPreset>();
 
 		private static bool _isInitComplete;
 
@@ -25,16 +25,16 @@ namespace LWGUI
 		{
 			_loadedPresets.Clear();
 			_isInitComplete = false;
-			var GUIDs = AssetDatabase.FindAssets("t:" + typeof(ShaderPropertyPreset));
+			var GUIDs = AssetDatabase.FindAssets("t:" + typeof(LwguiShaderPropertyPreset));
 			foreach (var GUID in GUIDs)
 			{
-				var preset = AssetDatabase.LoadAssetAtPath<ShaderPropertyPreset>(AssetDatabase.GUIDToAssetPath(GUID));
+				var preset = AssetDatabase.LoadAssetAtPath<LwguiShaderPropertyPreset>(AssetDatabase.GUIDToAssetPath(GUID));
 				AddPreset(preset);
 			}
 			_isInitComplete = true;
 		}
 
-		public static void AddPreset(ShaderPropertyPreset preset)
+		public static void AddPreset(LwguiShaderPropertyPreset preset)
 		{
 			if (!preset) return;
 			if (!_loadedPresets.ContainsKey(preset.name))
@@ -43,7 +43,7 @@ namespace LWGUI
 			}
 		}
 
-		public static ShaderPropertyPreset GetPresetAsset(string presetFileName)
+		public static LwguiShaderPropertyPreset GetPresetAsset(string presetFileName)
 		{
 			if (string.IsNullOrEmpty(presetFileName))
 				return null;
@@ -53,14 +53,18 @@ namespace LWGUI
 
 			if (!_loadedPresets.ContainsKey(presetFileName) || !_loadedPresets[presetFileName])
 			{
-				Debug.LogError("LWGUI: Invalid ShaderPropertyPreset path: ‘" + presetFileName + "’ !");
+				if (!BuildPipeline.isBuildingPlayer)
+					Debug.LogError("LWGUI: Invalid ShaderPropertyPreset path: ‘" + presetFileName + "’ !");
 				return null;
 			}
 
 			return _loadedPresets[presetFileName];
 		}
 
-		// For Developers: Call this after a material has modified in code
+		// For Developers: Call this function after creating a material,
+		// This applies all active presets and may modify some other properties.
+		// Usually called after the material is created, otherwise the material default value will not contain the results of Preset Drawers.
+		// If you only want to apply Keywords without modifying other properties, call UnityEditorExtension.ApplyMaterialPropertyAndDecoratorDrawers()
 		public static void ApplyPresetsInMaterial(Material material)
 		{
 			var props = MaterialEditor.GetMaterialProperties(new UnityEngine.Object[] { material });
@@ -69,11 +73,10 @@ namespace LWGUI
 				var drawer = ReflectionHelper.GetPropertyDrawer(material.shader, prop, out _);
 
 				// Apply active preset
-				if (drawer != null && drawer is IPresetDrawer)
+				if (drawer is IPresetDrawer presetDrawer)
 				{
-					var activePreset = (drawer as IPresetDrawer).GetActivePreset(prop, PresetHelper.GetPresetAsset((drawer as PresetDrawer).presetFileName));
-					if (activePreset != null)
-						activePreset.ApplyToDefaultMaterial(material);
+					var activePreset = presetDrawer.GetActivePreset(prop, GetPresetAsset(presetDrawer.GetPresetFileName()));
+					activePreset?.ApplyToDefaultMaterial(material);
 				}
 			}
 			UnityEditorExtension.ApplyMaterialPropertyAndDecoratorDrawers(material);
