@@ -20,7 +20,7 @@ namespace LWGUI.LwguiGradientEditor
             public float selectedKeysAverageTime = 0;
             public uint selectedChannel = 0;
             public bool isOnlyColorKeySelected;
-            public LwguiGradient.LwguiMergedColorCurves mergedCurves;
+            public LwguiMergedColorCurves mergedCurves;
             
             public bool hasMixedTime;
             public bool hasMixedFloatValue; // Selected multiple keys with different values in a same Curve
@@ -69,7 +69,7 @@ namespace LWGUI.LwguiGradientEditor
                     if (selectedFloatValue == float.NegativeInfinity)
                         selectedFloatValue = 0;
 
-                    mergedCurves = new LwguiGradient.LwguiMergedColorCurves(selectedAnimationCurves);
+                    mergedCurves = new LwguiMergedColorCurves(selectedAnimationCurves);
 
                     var noAlphaKeySelected = mergedCurves.curves[(int)LwguiGradient.Channel.Alpha].Count == 0;
                     hasMixedColorValue      = noAlphaKeySelected && hasMixedChannelValue.   Where((_, c) => c < (int)LwguiGradient.Channel.Alpha).Any(b => b);
@@ -77,7 +77,7 @@ namespace LWGUI.LwguiGradientEditor
                 }
                 else
                 {
-                    mergedCurves = new LwguiGradient.LwguiMergedColorCurves();
+                    mergedCurves = new LwguiMergedColorCurves();
                 }
             }
 
@@ -140,7 +140,7 @@ namespace LWGUI.LwguiGradientEditor
         internal ColorSpace colorSpace;
         internal LwguiGradient.ChannelMask viewChannelMask;
         internal LwguiGradient.GradientTimeRange gradientTimeRange;
-        private Action<LwguiGradient> _onChange;
+        private LwguiGradientWindow.ChangeGradientCallback _onChange;
         
         #endregion
 
@@ -201,7 +201,7 @@ namespace LWGUI.LwguiGradientEditor
 
             var lastSelectedGradientKey = _gradientEditor != null && _selectedGradientKey != null ? new GradientEditor.Swatch(_selectedGradientKey.m_Time, _selectedGradientKey.m_Value, _selectedGradientKey.m_IsAlpha) : null;
 
-            var lwguiMergedCurves = new LwguiGradient.LwguiMergedColorCurves(lwguiGradient.rawCurves);
+            var lwguiMergedCurves = new LwguiMergedColorCurves(lwguiGradient.rawCurves);
             _gradientEditor ??= new GradientEditor();
             _gradientEditor.Init(lwguiMergedCurves.ToGradient(ReflectionHelper.maxGradientKeyCount), 1024, colorSpace == ColorSpace.Linear, colorSpace);
             
@@ -311,6 +311,10 @@ namespace LWGUI.LwguiGradientEditor
                 viewChannelMask = (LwguiGradient.ChannelMask)EditorGUI.EnumFlagsField(rect, "Channels", viewChannelMask);
                 if (EditorGUI.EndChangeCheck())
                 {
+                    // TODO: Close the pop-up window immediately after modification to avoid inconsistent with the displayed value and the actual value.
+                    // The reason is unknown, the old version does not have this problem.
+                    ReflectionHelper.PopupWindowWithoutFocus_Hide();
+                    
                     _viewSettingschanged = true;
                     InitGradientEditor(true);
                     InitCurveEditor(true);
@@ -558,7 +562,10 @@ namespace LWGUI.LwguiGradientEditor
             ReflectionHelper.GradientEditor_SetStyles();
 
             _isAddGradientKeyFailure = false;
-            _gradientEditor.ShowSwatchArray(rect, (viewChannelMask & drawingChannelMask) != drawingChannelMask ? new List<GradientEditor.Swatch>() : swatches, drawingChannelMask == LwguiGradient.ChannelMask.Alpha);
+            _gradientEditor.ShowSwatchArray(rect, 
+                // Swatches are not displayed when ViewChannel != RGB to avoid modifying other channels
+                (viewChannelMask & drawingChannelMask) != drawingChannelMask ? new List<GradientEditor.Swatch>() : swatches, 
+                drawingChannelMask == LwguiGradient.ChannelMask.Alpha);
             
             // Since the maximum number of Gradient Keys is hard-coded in the engine, keys that exceed the limit can only be displayed and edited in the Curve Editor
             if (_isAddGradientKeyFailure)
@@ -747,7 +754,7 @@ namespace LWGUI.LwguiGradientEditor
             
             // Get curve key index
             _curveEditor.SelectNone();
-            var lwguiMergedCurves = new LwguiGradient.LwguiMergedColorCurves(lwguiGradient.rawCurves);
+            var lwguiMergedCurves = new LwguiMergedColorCurves(lwguiGradient.rawCurves);
             for (int c = 0; c < (int)LwguiGradient.Channel.Num; c++)
             {
                 if (selectedGradientKeyIndexes[c] < 0)
@@ -878,7 +885,12 @@ namespace LWGUI.LwguiGradientEditor
 
         #region Events
 
-        public void Init(Rect position, LwguiGradient gradient, ColorSpace colorSpace = ColorSpace.Gamma, LwguiGradient.ChannelMask viewChannelMask = LwguiGradient.ChannelMask.All, LwguiGradient.GradientTimeRange timeRange = LwguiGradient.GradientTimeRange.One, Action<LwguiGradient> onChange = null)
+        public void Init(Rect position, 
+            LwguiGradient gradient, 
+            ColorSpace colorSpace = ColorSpace.Gamma, 
+            LwguiGradient.ChannelMask viewChannelMask = LwguiGradient.ChannelMask.All, 
+            LwguiGradient.GradientTimeRange timeRange = LwguiGradient.GradientTimeRange.One, 
+            LwguiGradientWindow.ChangeGradientCallback onChange = null)
         {
             Clear();
             
@@ -918,7 +930,7 @@ namespace LWGUI.LwguiGradientEditor
                     UnityEditor.SceneManagement.EditorSceneManager.MarkAllScenesDirty();
                 
                 GUI.changed = true;
-                _onChange?.Invoke(lwguiGradient);
+                // _onChange?.Invoke(lwguiGradient);
             }
 
             if (_viewSettingschanged)

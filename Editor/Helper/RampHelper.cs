@@ -1,12 +1,10 @@
-﻿// Copyright (c) Jason Ma
-using System;
+// Copyright (c) Jason Ma
 using System.IO;
 using System.Linq;
 using LWGUI.LwguiGradientEditor;
 using LWGUI.Runtime.LwguiGradient;
 using UnityEditor;
 using UnityEngine;
-using Object = UnityEngine.Object;
 
 namespace LWGUI
 {
@@ -14,35 +12,29 @@ namespace LWGUI
 	{
 		#region RampEditor
 
-		public static readonly string projectPath = Application.dataPath.Substring(0, Application.dataPath.Length - 6);
-
-
 		private static readonly GUIContent _iconAdd     = new GUIContent(EditorGUIUtility.IconContent("d_Toolbar Plus").image, "Add"),
 										   _iconEdit    = new GUIContent(EditorGUIUtility.IconContent("editicon.sml").image, "Edit"),
 										   _iconDiscard = new GUIContent(EditorGUIUtility.IconContent("d_TreeEditor.Refresh").image, "Discard"),
 										   _iconSave    = new GUIContent(EditorGUIUtility.IconContent("SaveActive").image, "Save");
 
-		public static bool RampEditor(
+		public static void RampEditor(
 			Rect buttonRect,
-			MaterialProperty prop,
 			ref LwguiGradient gradient,
 			ColorSpace colorSpace,
 			LwguiGradient.ChannelMask viewChannelMask,
 			LwguiGradient.GradientTimeRange timeRange,
 			bool isDirty,
-			string defaultFileName,
-			string rootPath,
-			int defaultWidth,
-			int defaultHeight,
+			out bool hasChange,
+			out bool doEditWhenNoGradient,
 			out bool doRegisterUndo,
-			out Texture2D newTexture,
+			out bool doCreate,
 			out bool doSave,
-			out bool doDiscard
+			out bool doDiscard,
+			LwguiGradientWindow.ChangeGradientCallback onChangeGradient = null
 			)
 		{
-			newTexture = null;
-			var hasChange = false;
-			var shouldCreate = false;
+			var hasNoGradient = gradient == null;
+			var _doEditWhenNoGradient = false;
 			var doOpenWindow = false;
 			var singleButtonWidth = buttonRect.width * 0.25f;
 			var editRect = new Rect(buttonRect.x + singleButtonWidth * 0, buttonRect.y, singleButtonWidth, buttonRect.height);
@@ -51,14 +43,15 @@ namespace LWGUI
 			var discardRect = new Rect(buttonRect.x + singleButtonWidth * 3, buttonRect.y, singleButtonWidth, buttonRect.height);
 
 			// Edit button event
+			hasChange = false;
 			{
 				EditorGUI.BeginChangeCheck();
 				LwguiGradientEditorHelper.GradientEditButton(editRect, _iconEdit, gradient, colorSpace, viewChannelMask, timeRange, () =>
 				{
 					// if the current edited texture is null, create new one
-					if (prop.textureValue == null)
+					if (hasNoGradient)
 					{
-						shouldCreate = true;
+						_doEditWhenNoGradient = true;
 						Event.current.Use();
 						return false;
 					}
@@ -67,47 +60,23 @@ namespace LWGUI
 						doOpenWindow = true;
 						return true;
 					}
-				});
+				}, onChangeGradient);
 				if (EditorGUI.EndChangeCheck())
 				{
 					hasChange = true;
-					gradient = LwguiGradientWindow.instance.lwguiGradient;
+					if (LwguiGradientWindow.instance)
+					{
+						gradient = LwguiGradientWindow.instance.lwguiGradient;
+					}
 				}
 
 				doRegisterUndo = doOpenWindow;
 			}
+			doEditWhenNoGradient = _doEditWhenNoGradient;
+
 			
 			// Create button
-			if (GUI.Button(addRect, _iconAdd) || shouldCreate)
-			{
-				while (true)
-				{
-					if (!Directory.Exists(projectPath + rootPath))
-						Directory.CreateDirectory(projectPath + rootPath);
-
-					var absPath = EditorUtility.SaveFilePanel("Create New Ramp Texture", rootPath, defaultFileName, "png");
-					
-					if (absPath.StartsWith(projectPath + rootPath))
-					{
-						//Create texture and save PNG
-						var saveUnityPath = absPath.Replace(projectPath, String.Empty);
-						CreateAndSaveNewGradientTexture(defaultWidth, defaultHeight, saveUnityPath, colorSpace == ColorSpace.Linear);
-						// VersionControlHelper.Add(saveUnityPath);
-						//Load created texture
-						newTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(saveUnityPath);
-						break;
-					}
-					else if (absPath != String.Empty)
-					{
-						var retry = EditorUtility.DisplayDialog("Invalid Path", "Please select the subdirectory of '" + projectPath + rootPath + "'", "Retry", "Cancel");
-						if (!retry) break;
-					}
-					else
-					{
-						break;
-					}
-				}
-			}
+			doCreate = GUI.Button(addRect, _iconAdd);
 
 			// Save button
 			{
@@ -119,8 +88,6 @@ namespace LWGUI
 			
 			// Discard button
 			doDiscard = GUI.Button(discardRect, _iconDiscard);
-
-			return hasChange;
 		}
 
 		public static bool HasGradient(AssetImporter assetImporter) { return assetImporter.userData.Contains("#");}
@@ -174,9 +141,8 @@ namespace LWGUI
 			// Save texture to disk
 			if (doSaveToDisk)
 			{
-				var systemPath = projectPath + path;
 				VersionControlHelper.Checkout(path);
-				File.WriteAllBytes(systemPath, texture2D.EncodeToPNG());
+				File.WriteAllBytes(IOHelper.GetAbsPath(path), texture2D.EncodeToPNG());
 				assetImporter.SaveAndReimport();
 			}
 		}
@@ -228,28 +194,41 @@ namespace LWGUI
 			var ramp = gradient.GetPreviewRampTexture(width, height, ColorSpace.Linear);
 			var png = ramp.EncodeToPNG();
 
-			var systemPath = projectPath + unityPath;
-			File.WriteAllBytes(systemPath, png);
+			File.WriteAllBytes(IOHelper.GetAbsPath(unityPath), png);
 
 			AssetDatabase.ImportAsset(unityPath);
+			SetRampTextureImporter(unityPath, true, isLinear, EncodeGradientToJSON(gradient, gradient));
+
+			return true;
+		}
+
+		public static void SetRampTextureImporter(string unityPath, bool isReadable = true, bool isLinear = false, string userData = null)
+		{
 			var textureImporter = AssetImporter.GetAtPath(unityPath) as TextureImporter;
+			if (!textureImporter)
+			{
+				Debug.LogError($"LWGUI: Can NOT get TextureImporter at path: { unityPath }");
+				return;
+			}
+			
 			textureImporter.wrapMode = TextureWrapMode.Clamp;
-			textureImporter.isReadable = true;
+			textureImporter.isReadable = isReadable;
 			textureImporter.textureCompression = TextureImporterCompression.Uncompressed;
 			textureImporter.alphaSource = TextureImporterAlphaSource.FromInput;
 			textureImporter.mipmapEnabled = false;
 			textureImporter.sRGBTexture = !isLinear;
 
-			var platformTextureSettings = textureImporter.GetDefaultPlatformTextureSettings();
-			platformTextureSettings.format = TextureImporterFormat.RGBA32;
-			platformTextureSettings.textureCompression = TextureImporterCompression.Uncompressed;
-			textureImporter.SetPlatformTextureSettings(platformTextureSettings);
+			foreach (var platformName in Helper.platformNamesForTextureSettings)
+			{
+				var platformTextureSettings = textureImporter.GetPlatformTextureSettings(platformName);
+				platformTextureSettings.format = TextureImporterFormat.RGBA32;
+				textureImporter.SetPlatformTextureSettings(platformTextureSettings);
+			}
 
-			//Gradient data embedded in userData
-			textureImporter.userData = EncodeGradientToJSON(gradient, gradient);
+			if (userData != null)
+				textureImporter.userData = userData;
+			
 			textureImporter.SaveAndReimport();
-
-			return true;
 		}
 
 		#endregion
@@ -257,7 +236,7 @@ namespace LWGUI
 
 		#region RampSelector
 
-		public static void RampSelector(Rect rect, string rootPath, Action<Texture2D> switchRampMapEvent)
+		public static void RampMapSelectorOverride(Rect rect, MaterialProperty prop, string rootPath, RampSelectorWindow.SwitchRampMapCallback switchRampMapEvent)
 		{
 			var e = Event.current;
 			if (e.type == UnityEngine.EventType.MouseDown && rect.Contains(e.mousePosition))
@@ -275,53 +254,136 @@ namespace LWGUI
 					else
 						return null;
 				}).ToArray();
-				RampSelectorWindow.ShowWindow(rect, rampMaps, switchRampMapEvent);
+				RampSelectorWindow.ShowWindow(prop, rampMaps, switchRampMapEvent);
 			}
 		}
+
 		#endregion
 	}
 
 	public class RampSelectorWindow : EditorWindow
 	{
+		public delegate void SwitchRampMapCallback(MaterialProperty prop, Texture2D newRampMap, int index);
+		public delegate void SwitchRampCallback(MaterialProperty prop, int rampIndex);
+
+		private LwguiRampAtlas _rampAtlas;
 		private Texture2D[] _rampMaps;
 		private Vector2 _scrollPosition;
-		private Action<Texture2D> _switchRampMapEvent;
+		private MaterialProperty _prop;
+		private SwitchRampCallback _switchRampEvent;
+		private SwitchRampMapCallback _switchRampMapEvent;
 
-		public static void ShowWindow(Rect rect, Texture2D[] rampMaps, Action<Texture2D> switchRampMapEvent)
+		private const float RowHeight = 18f;
+		private const float RowSpacing = 2f;
+
+		public static void ShowWindow(MaterialProperty prop, LwguiRampAtlas rampAtlas, SwitchRampCallback switchRampEvent)
 		{
-			RampSelectorWindow window = ScriptableObject.CreateInstance<RampSelectorWindow>();
+			LwguiGradientWindow.CloseWindow();
+			var window = CreateInstance<RampSelectorWindow>();
+			window.titleContent = new GUIContent("Ramp Selector (Atlas)");
+			window.minSize = new Vector2(400, 500);
+			window._rampAtlas = rampAtlas;
+			window._prop = prop;
+			window._switchRampEvent = switchRampEvent;
+			window.ShowAuxWindow();
+		}
+
+		public static void ShowWindow(MaterialProperty prop, Texture2D[] rampMaps, SwitchRampMapCallback switchRampMapEvent)
+		{
+			LwguiGradientWindow.CloseWindow();
+			var window = CreateInstance<RampSelectorWindow>();
 			window.titleContent = new GUIContent("Ramp Selector");
 			window.minSize = new Vector2(400, 500);
 			window._rampMaps = rampMaps;
+			window._prop = prop;
 			window._switchRampMapEvent = switchRampMapEvent;
 			window.ShowAuxWindow();
 		}
 		
 		private void OnGUI()
 		{
+			if (_rampAtlas != null)
+				DrawRampAtlasSelector();
+			else if (_rampMaps != null)
+				DrawRampMapSelector();
+			else
+				EditorGUILayout.HelpBox("No Ramp data available", MessageType.Error);
+		}
+
+		private void DrawRampAtlasSelector()
+		{
 			EditorGUILayout.BeginVertical();
 			_scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
 
-			foreach (Texture2D rampMap in _rampMaps)
+			for (int i = 0; i < _rampAtlas.RampCount; i++)
 			{
-				EditorGUILayout.BeginHorizontal();
-				if (rampMap != null)
+				var ramp = _rampAtlas.GetRamp(i);
+				if (ramp == null) continue;
+
+				var previewTextures = ramp.GetPreviewTexturesForRampSelector(_rampAtlas.rampAtlasWidth);
+				var textureCount = previewTextures?.Length ?? 0;
+				var totalHeight = Mathf.Max(1, textureCount) * RowHeight + Mathf.Max(0, textureCount - 1) * RowSpacing;
+
+				var rect = EditorGUILayout.GetControlRect(GUILayout.Height(totalHeight));
+				var guiContent = new GUIContent($"{i}. {ramp.Name}");
+				var buttonWidth = Mathf.Min(300f, Mathf.Max(GUI.skin.button.CalcSize(guiContent).x, rect.width * 0.35f));
+				var buttonRect = new Rect(rect.x + rect.width - buttonWidth, rect.y, buttonWidth, totalHeight);
+				var previewWidth = rect.width - buttonWidth - 3.0f;
+
+				// Draw preview textures vertically
+				if (previewTextures != null)
 				{
-					var guiContent = new GUIContent(rampMap.name);
-					var rect = EditorGUILayout.GetControlRect();
-					var buttonWidth = Mathf.Min(300f, Mathf.Max(GUI.skin.button.CalcSize(guiContent).x, rect.width * 0.35f));
-					var buttonRect = new Rect(rect.x + rect.width - buttonWidth, rect.y, buttonWidth, rect.height);
-					var previewRect = new Rect(rect.x, rect.y, rect.width - buttonWidth - 3.0f, rect.height);
-					if (GUI.Button(buttonRect, guiContent) && _switchRampMapEvent != null)
+					for (int j = 0; j < previewTextures.Length; j++)
 					{
-						_switchRampMapEvent(rampMap);
-						Close();
+						if (previewTextures[j] == null) continue;
+						var previewRect = new Rect(rect.x, rect.y + j * (RowHeight + RowSpacing), previewWidth, RowHeight);
+						EditorGUI.DrawPreviewTexture(previewRect, previewTextures[j]);
 					}
-					EditorGUI.DrawPreviewTexture(previewRect, rampMap);
 				}
-				EditorGUILayout.EndHorizontal();
+
+				// Draw button (stretches to cover all preview rows)
+				if (GUI.Button(buttonRect, guiContent, GUIStyles.rampSelectButton) && _switchRampEvent != null)
+				{
+					_switchRampEvent(_prop, i);
+					LwguiGradientWindow.CloseWindow();
+					Close();
+				}
+
+				GUILayout.Space(RowSpacing);
 			}
-			
+
+			EditorGUILayout.EndScrollView();
+			EditorGUILayout.EndVertical();
+		}
+
+		private void DrawRampMapSelector()
+		{
+			EditorGUILayout.BeginVertical();
+			_scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
+
+			for (int i = 0; i < _rampMaps.Length; i++)
+			{
+				var rampMap = _rampMaps[i];
+				if (rampMap == null) continue;
+
+				var rect = EditorGUILayout.GetControlRect(GUILayout.Height(RowHeight));
+				var guiContent = new GUIContent($"{i}. {rampMap.name}");
+				var buttonWidth = Mathf.Min(300f, Mathf.Max(GUI.skin.button.CalcSize(guiContent).x, rect.width * 0.35f));
+				var buttonRect = new Rect(rect.x + rect.width - buttonWidth, rect.y, buttonWidth, RowHeight);
+				var previewRect = new Rect(rect.x, rect.y, rect.width - buttonWidth - 3.0f, RowHeight);
+
+				EditorGUI.DrawPreviewTexture(previewRect, rampMap);
+
+				if (GUI.Button(buttonRect, guiContent, GUIStyles.rampSelectButton) && _switchRampMapEvent != null)
+				{
+					_switchRampMapEvent(_prop, rampMap, i);
+					LwguiGradientWindow.CloseWindow();
+					Close();
+				}
+
+				GUILayout.Space(RowSpacing);
+			}
+
 			EditorGUILayout.EndScrollView();
 			EditorGUILayout.EndVertical();
 		}

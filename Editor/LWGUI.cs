@@ -1,4 +1,4 @@
-﻿// Copyright (c) Jason Ma
+// Copyright (c) Jason Ma
 
 using UnityEditor;
 using UnityEngine;
@@ -10,7 +10,8 @@ namespace LWGUI
 
 	public class LWGUI : ShaderGUI
 	{
-		public LWGUIMetaDatas     metaDatas;
+		public LWGUIMetaDatas metaDatas;
+		public bool hasChange;
 
 		public static LWGUICustomGUIEvent onDrawCustomHeader;
 		public static LWGUICustomGUIEvent onDrawCustomFooter;
@@ -29,6 +30,11 @@ namespace LWGUI
 			// Init Datas
 			var material = editor.target as Material;
 			var shader = material.shader;
+			if (hasChange)
+			{
+				OnValidate(editor.targets);
+				hasChange = false;
+			}
 			this.metaDatas = MetaDataHelper.BuildMetaDatas(shader, material, editor, this, props);
 
 
@@ -38,19 +44,22 @@ namespace LWGUI
 				onDrawCustomHeader(this);
 
 			// Toolbar
-			bool enabled = GUI.enabled;
-			GUI.enabled = true;
-			var toolBarRect = EditorGUILayout.GetControlRect();
-			toolBarRect.xMin = 2;
+			{
+				bool enabled = GUI.enabled;
+				GUI.enabled = true;
+				var toolBarRect = EditorGUILayout.GetControlRect();
+				toolBarRect.xMin = 2;
 
-			Helper.DrawToolbarButtons(ref toolBarRect, metaDatas);
+				ToolbarHelper.DrawToolbarButtons(ref toolBarRect, metaDatas);
+				ToolbarHelper.DrawSearchField(toolBarRect, metaDatas);
 
-			Helper.DrawSearchField(toolBarRect, metaDatas);
+				GUILayoutUtility.GetRect(0, 0); // Space(0)
+				GUI.enabled = enabled;
+				Helper.DrawSplitLine();
 
-			GUILayoutUtility.GetRect(0, 0); // Space(0)
-			GUI.enabled = enabled;
-			Helper.DrawSplitLine();
-
+				ToolbarHelper.DrawShaderPerformanceStats(metaDatas);
+			}
+			
 
 			//-----------------------------------------------------------------------------
 			// Draw Properties
@@ -141,7 +150,7 @@ namespace LWGUI
 			if (Event.current.type == EventType.MouseDown && Event.current.button == 0 && rect.Contains(Event.current.mousePosition))
 				propStaticData.isExpanding = !propStaticData.isExpanding;
 			RevertableHelper.DrawRevertableProperty(revertButtonRect, prop, metaDatas, true);
-			Helper.DoPropertyContextMenus(rect, prop, metaDatas);
+			ContextMenuHelper.DoPropertyContextMenus(rect, prop, metaDatas);
 		}
 
 		private void DrawProperty(MaterialProperty prop)
@@ -163,12 +172,15 @@ namespace LWGUI
 			var enabled = GUI.enabled;
 			if (propStaticData.isReadOnly) GUI.enabled = false;
 			Helper.BeginProperty(rect, prop, metaDatas);
-			Helper.DoPropertyContextMenus(rect, prop, metaDatas);
-			RevertableHelper.FixGUIWidthMismatch(prop.type, materialEditor);
+			ContextMenuHelper.DoPropertyContextMenus(rect, prop, metaDatas);
+			
+			RevertableHelper.FixGUIWidthMismatch(prop.GetPropertyType(), materialEditor);
 			if (propStaticData.isAdvancedHeaderProperty)
 				propStaticData.isExpanding = EditorGUI.Foldout(rect, propStaticData.isExpanding, string.Empty);
+			
 			RevertableHelper.DrawRevertableProperty(revertButtonRect, prop, metaDatas, propStaticData.isMain || propStaticData.isAdvancedHeaderProperty);
 			materialEditor.ShaderProperty(rect, prop, label);
+			
 			Helper.EndProperty(metaDatas, prop);
 			GUI.enabled = enabled;
 		}
@@ -199,22 +211,39 @@ namespace LWGUI
 			OnValidate(metaDatas?.GetMaterialEditor()?.targets);
 		}
 		
-		// Called after Edit/Undo/MaterialEditor.GetMaterialProperties()
 		public override void ValidateMaterial(Material material)
 		{
-			base.ValidateMaterial(material);
+			// Debug.Log($"ValidateMaterial {material.name}, {metaDatas}, {Event.current?.type}");
 
-			// Undo/Edit in Timeline
-			// Note: When modifying the material in Timeline in Unity 2022, this function cannot correctly obtain the modified value.
-			if (metaDatas == null)
+			// Validate a Faked Material when select/edit a Material
+			if (metaDatas == null && (Event.current == null || Event.current.type == EventType.Layout))
 			{
-				// OnValidate(new Object[] { material });
+				// Skip to avoid lag when editing large amounts of materials
+			}
+			// Undo/Edit in Timeline (EventType.Repaint)
+			// Note: When modifying the material in Timeline in Unity 2022, this function cannot correctly obtain the modified value.
+			else if (metaDatas == null)
+			{
 				MetaDataHelper.ForceUpdateMaterialMetadataCache(material);
 			}
 			// Edit
 			else
 			{
-				OnValidate(metaDatas);
+				if (!hasChange) hasChange = true;
+			}
+		}
+		
+		[MenuItem("CONTEXT/Material/Reimport Shader", false, 100)]
+		static void MenuItem_ReimportShader(MenuCommand command)
+		{
+			var mat = command.context as Material;
+			if (mat != null)
+			{
+				var path = AssetDatabase.GetAssetPath(mat.shader);
+				if (!string.IsNullOrEmpty(path))
+				{
+					AssetDatabase.ImportAsset(path);
+				}
 			}
 		}
 	}
