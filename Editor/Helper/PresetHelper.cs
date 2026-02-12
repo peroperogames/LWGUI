@@ -1,4 +1,6 @@
 ﻿// Copyright (c) Jason Ma
+
+using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -9,10 +11,20 @@ namespace LWGUI
 	{
 		private static Dictionary<string /*FileName*/, LwguiShaderPropertyPreset> _loadedPresets = new Dictionary<string, LwguiShaderPropertyPreset>();
 
+		private static readonly string _domainKey = "ShaderPropertyPresetStorageDomainHash";
 		private static bool _isInitComplete;
 
 		public static bool IsInitComplete { get { return _isInitComplete; } }
 
+		[InitializeOnLoadMethod]
+		private static void StorageDomainHash()
+		{
+			EditorApplication.delayCall += () =>
+			{
+				SessionState.SetString(_domainKey, AppDomain.CurrentDomain.GetHashCode().ToString());
+			};
+		}
+		
 		public static void Init()
 		{
 			if (!_isInitComplete)
@@ -47,6 +59,14 @@ namespace LWGUI
 		{
 			if (string.IsNullOrEmpty(presetFileName))
 				return null;
+			
+			// 在某些域下，静态变量的缓存会有问题，而且无法找到Packages下的Preset，所以忽略
+			var domainHash = AppDomain.CurrentDomain.GetHashCode().ToString();
+			var expectedDomainHash = SessionState.GetString(_domainKey, string.Empty);
+			if (string.IsNullOrEmpty(expectedDomainHash) || !domainHash.Equals(expectedDomainHash))
+			{
+				return null;
+			}
 			
 			if (!_loadedPresets.ContainsKey(presetFileName) || !_loadedPresets[presetFileName])
 				ForceInit();
